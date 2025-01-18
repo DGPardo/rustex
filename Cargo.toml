@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "rustex-core",
+    "rustex-api",
+]
+resolver = "2"
+

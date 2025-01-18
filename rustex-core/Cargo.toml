@@ -1,0 +1,7 @@
+[package]
+name = "rustex-core"
+version = "0.0.0"
+authors = ["Diego Pardo"]
+edition = "2021"
+
+[dependencies]

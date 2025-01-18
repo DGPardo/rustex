@@ -1,0 +1,13 @@
+[package]
+name = "rustex-api"
+version = "0.0.0"
+authors = ["Diego Pardo"]
+edition = "2021"
+
+[features]
+rest_api = []
+socket_api = []
+default = ["rest_api"]
+
+
+[dependencies]
