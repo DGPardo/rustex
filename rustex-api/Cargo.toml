@@ -5,9 +5,16 @@ authors = ["Diego Pardo"]
 edition = "2021"
 
 [features]
-rest_api = []
+rest_api = ["actix-web", "rustls"]
 socket_api = []
 default = ["rest_api"]
 
 
 [dependencies]
+actix-web = { version = "4.9.0", optional = true, features = ["rustls-0_23"] }
+log = "0.4.25"
+rustls = { version = "0.23", optional = true }
+rustls-pemfile = "2.2.0"
+serde = "1.0.217"
+serde_json = "1.0.135"
+tokio = { version = "1.43.0", features = ["full"] }

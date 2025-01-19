@@ -5,3 +5,5 @@ authors = ["Diego Pardo"]
 edition = "2021"
 
 [dependencies]
+log = "0.4.25"
+serde = { version = "1.0.217", features = ["derive"] }
