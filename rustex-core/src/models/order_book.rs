@@ -3,9 +3,9 @@ use std::{collections::BinaryHeap, sync::Mutex};
 use crate::{lock, order_matching::MatchOrders};
 
 use super::{
-    orders::{BuyOrder, Order, SellOrder},
-    trade::Trade,
-    EpochTime,
+    orders::{BuyOrder, Order, OrderId, SellOrder},
+    trade::{Trade, TradeId},
+    EpochTime, UserId,
 };
 
 /// Book Tracking of orders
@@ -19,63 +19,61 @@ use super::{
 pub struct OrderBook {
     pub(crate) buy_orders: Mutex<BinaryHeap<BuyOrder>>, // Max-heap. Highest price at the root
     pub(crate) sell_orders: Mutex<BinaryHeap<SellOrder>>, // Min-heap. Lowest price at the root
-    order_counter: Mutex<u128>,
-    trade_counter: Mutex<u128>,
+    order_counter: Mutex<OrderId>,                      // TODO: Perhaps AtomicU64 is enough?
+    trade_counter: Mutex<TradeId>,                      // TODO: Perhaps AtomicU64 is enough?
 }
 
 impl OrderBook {
-    fn fetch_next_order_id(&self) -> u128 {
-        let mut counter = lock!(self.order_counter);
-        *counter += 1;
-        *counter
+    fn fetch_next_order_id(&self) -> OrderId {
+        lock!(self.order_counter).fetch_increment()
     }
 
-    fn fetch_next_trade_id(&self) -> u128 {
-        let mut counter = lock!(self.trade_counter);
-        *counter += 1;
-        *counter
+    fn fetch_next_trade_id(&self) -> TradeId {
+        lock!(self.trade_counter).fetch_increment()
     }
 
     pub fn insert_buy_order(
         &self,
-        user_id: u64,
+        user_id: UserId,
         price: u64,
         quantity: f64,
-    ) -> Result<(u128, Vec<Trade>), Box<dyn std::error::Error>> {
+        time: EpochTime,
+    ) -> (OrderId, Vec<Trade>) {
         let order_id = self.fetch_next_order_id();
         let order = Order {
             id: order_id,
             user_id,
             price,
             quantity,
-            unix_epoch: EpochTime::now()?,
+            unix_epoch: time,
         };
         let trades = BuyOrder::from(order).match_order(self);
-        Ok((order_id, trades))
+        (order_id, trades)
     }
 
     pub fn insert_sell_order(
         &self,
-        user_id: u64,
+        user_id: UserId,
         price: u64,
         quantity: f64,
-    ) -> Result<(u128, Vec<Trade>), Box<dyn std::error::Error>> {
+        time: EpochTime,
+    ) -> (OrderId, Vec<Trade>) {
         let order_id = self.fetch_next_order_id();
         let order = Order {
             id: order_id,
             user_id,
             price,
             quantity,
-            unix_epoch: EpochTime::now()?,
+            unix_epoch: time,
         };
         let trades = SellOrder::from(order).match_order(self);
-        Ok((order_id, trades))
+        (order_id, trades)
     }
 
     pub fn make_trade(
         &self,
-        buy_order_id: u128,
-        sell_order_id: u128,
+        buy_order_id: OrderId,
+        sell_order_id: OrderId,
         price: u64,
         quantity: f64,
     ) -> Trade {

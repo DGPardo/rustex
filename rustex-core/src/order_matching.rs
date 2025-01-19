@@ -117,36 +117,38 @@ impl MatchOrders for SellOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::EpochTime;
 
     #[test]
     fn test_successful_match() {
         let book = OrderBook::default();
 
-        let (order_id, trades) = book.insert_sell_order(123, 50, 10.0).unwrap();
-        assert_eq!(order_id, 1);
+        let now = EpochTime::now().unwrap();
+        let (order_id, trades) = book.insert_sell_order(123.into(), 50, 10.0, now);
+        assert_eq!(order_id, 0u128.into());
         assert!(trades.is_empty());
 
-        let (order_id, trades) = book.insert_sell_order(456, 45, 5.0).unwrap();
-        assert_eq!(order_id, 2);
+        let (order_id, trades) = book.insert_sell_order(456.into(), 45, 5.0, now);
+        assert_eq!(order_id, 1u128.into());
         assert!(trades.is_empty());
 
-        let (order_id, trades) = book.insert_buy_order(2, 50, 8.0).unwrap();
-        assert_eq!(order_id, 3);
+        let (order_id, trades) = book.insert_buy_order(2.into(), 50, 8.0, now);
+        assert_eq!(order_id, 2u128.into());
 
         assert_eq!(
             trades,
             vec![
                 Trade {
-                    id: 1,
-                    buy_order_id: 3,
-                    sell_order_id: 2,
+                    id: 0.into(),
+                    buy_order_id: 2.into(),
+                    sell_order_id: 1.into(),
                     price: 45,
                     quantity: 5.0
                 },
                 Trade {
-                    id: 2,
-                    buy_order_id: 3,
-                    sell_order_id: 1,
+                    id: 1.into(),
+                    buy_order_id: 2.into(),
+                    sell_order_id: 0.into(),
                     price: 50,
                     quantity: 3.0
                 },
@@ -154,9 +156,9 @@ mod tests {
         );
 
         let computed_sell_order = lock!(book.sell_orders).pop().unwrap();
-        assert_eq!(computed_sell_order.id, 1);
+        assert_eq!(computed_sell_order.id, 0.into());
         assert_eq!(computed_sell_order.price, 50);
         assert!((computed_sell_order.quantity - 7.0).abs() < f64::EPSILON);
-        assert_eq!(computed_sell_order.user_id, 123);
+        assert_eq!(computed_sell_order.user_id, 123.into());
     }
 }

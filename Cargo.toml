@@ -2,6 +2,15 @@
 members = [
     "rustex-core",
     "rustex-api",
+    "rustex-micro",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+log = "0.4.25"
+rustex-core = { path = "./rustex-core" }
+rustex-api = { path = "./rustex-api" }
+rustex-micro = { path = "./rustex-micro" }
+serde = { version = "1.0.217", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
 

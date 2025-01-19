@@ -1,5 +1,4 @@
 mod currencies;
-mod db;
 mod models;
 mod order_matching;
 pub mod prelude;

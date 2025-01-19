@@ -1,7 +1,24 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
-use super::EpochTime;
+use super::{EpochTime, UserId};
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Default, Clone, Copy)]
+pub struct OrderId(u128);
+
+impl OrderId {
+    pub fn fetch_increment(&mut self) -> OrderId {
+        let curr_value = self.0;
+        self.0 += 1;
+        OrderId(curr_value)
+    }
+}
+
+impl From<u128> for OrderId {
+    fn from(value: u128) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct BuyOrder(Order);
@@ -10,11 +27,11 @@ pub struct BuyOrder(Order);
 pub struct SellOrder(Order);
 
 /// Defines an order (either buy or sell order)
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Order {
     /// This will be unique and always increasing number
-    pub(crate) id: u128,
-    pub(crate) user_id: u64,
+    pub(crate) id: OrderId,
+    pub(crate) user_id: UserId,
     pub(crate) price: u64, // working with cents
     pub(crate) quantity: f64,
     pub(crate) unix_epoch: EpochTime,
@@ -56,7 +73,6 @@ macro_rules! implement_order_traits {
                     $order(order)
                 }
             }
-
         )*
     };
 }
