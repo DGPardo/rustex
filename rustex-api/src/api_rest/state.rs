@@ -6,10 +6,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new() -> anyhow::Result<Self> {
         Ok(Self {
             time_rpc_client: rpc_clients::get_time_service_client(("0.0.0.0", 7777)).await?, // TODO: env vars
-            match_order_rpc_client: rpc_clients::get_match_orders_client(("0.0.0.0", 5555)).await?, // TODO: env vars
+            match_order_rpc_client: rpc_clients::get_match_service_client(("0.0.0.0", 5555))
+                .await?, // TODO: env vars
         })
     }
 }

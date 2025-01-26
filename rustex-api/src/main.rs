@@ -6,6 +6,8 @@ mod auth;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let mut servers = tokio::task::JoinSet::new();
 
     #[cfg(feature = "rest_api")]
@@ -15,11 +17,11 @@ async fn main() {
     servers.spawn(api_socket::launch_socket_server());
 
     tokio::select! {
-        _ = servers.join_all() => {
-            // Servers aborted
+        err = servers.join_all() => {
+            log::error!("Server aborted {:?}", err);
         }
         _ = tokio::signal::ctrl_c() => {
-            // Graceful shutdown logic
+            log::warn!("Detected Ctrl + C");
         }
     }
 }

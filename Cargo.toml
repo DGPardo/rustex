@@ -7,6 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
+env_logger = "0.11.6"
 log = "0.4.25"
 rustex-core = { path = "./rustex-core" }
 rustex-api = { path = "./rustex-api" }

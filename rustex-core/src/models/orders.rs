@@ -3,7 +3,9 @@ use std::ops::{Deref, DerefMut};
 
 use super::{EpochTime, UserId};
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Default, Clone, Copy)]
+#[derive(
+    Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Default, Clone, Copy, Hash,
+)]
 pub struct OrderId(u128);
 
 impl OrderId {
@@ -26,16 +28,48 @@ pub struct BuyOrder(Order);
 #[derive(Debug, PartialEq, Eq)]
 pub struct SellOrder(Order);
 
-/// Defines an order (either buy or sell order)
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Order {
-    /// This will be unique and always increasing number
-    pub(crate) id: OrderId,
-    pub(crate) user_id: UserId,
-    pub(crate) price: u64, // working with cents
-    pub(crate) quantity: f64,
-    pub(crate) unix_epoch: EpochTime,
+macro_rules! define_struct_with_getters {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $name:ident {
+            $(
+                $(#[$field_meta:meta])*
+                $field_vis:vis $field_name:ident: $field_ty:ty
+            ),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Serialize, Deserialize)]
+        $vis struct $name {
+            $(
+                $(#[$field_meta])*
+                $field_vis $field_name: $field_ty
+            ),*
+        }
+
+        paste::paste! {
+            impl $name {
+                $(
+                    pub fn [< get_ $field_name >](&self) -> &$field_ty {
+                        &self.$field_name
+                    }
+                )*
+            }
+        }
+    };
 }
+
+define_struct_with_getters!(
+    /// Defines an order (either buy or sell order)
+    pub struct Order {
+        /// This will be unique and always increasing number
+        pub(crate) id: OrderId,
+        pub(crate) user_id: UserId,
+        pub(crate) price: u64, // working with cents
+        pub(crate) quantity: f64,
+        pub(crate) unix_epoch: EpochTime,
+    }
+);
 
 impl Eq for Order {}
 

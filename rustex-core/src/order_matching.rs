@@ -7,18 +7,20 @@ use crate::{
         orders::{BuyOrder, Order, SellOrder},
         trade::Trade,
     },
+    prelude::OrderId,
 };
 
 pub trait MatchOrders: DerefMut<Target = Order> {
-    fn match_order(self, book: &OrderBook) -> Vec<Trade>;
+    fn match_order(self, book: &OrderBook) -> (Vec<Trade>, Vec<OrderId>);
 }
 
 impl MatchOrders for BuyOrder {
-    fn match_order(mut self, book: &OrderBook) -> Vec<Trade> {
+    fn match_order(mut self, book: &OrderBook) -> (Vec<Trade>, Vec<OrderId>) {
         let mut trades = vec![];
+        let mut completed_orders = vec![];
 
         if self.quantity == 0.0 {
-            return trades;
+            return (trades, completed_orders);
         }
 
         {
@@ -29,6 +31,7 @@ impl MatchOrders for BuyOrder {
                 if sell_order.price > self.price {
                     // No match. The best sell price (lowest price)
                     // Exceeds the bid price (which is too low)
+                    sell_orders.push(sell_order); // TODO: avoid pop() and push()
                     break;
                 }
 
@@ -48,10 +51,13 @@ impl MatchOrders for BuyOrder {
                 // If the sell order still has some quantity
                 if sell_order.quantity.abs() > f64::EPSILON {
                     sell_orders.push(sell_order);
+                } else {
+                    completed_orders.push(*sell_order.get_id());
                 }
 
                 if self.quantity.abs() < f64::EPSILON {
-                    return trades;
+                    completed_orders.push(*self.get_id());
+                    return (trades, completed_orders);
                 }
             }
         } // Release sell_orders lock
@@ -59,26 +65,29 @@ impl MatchOrders for BuyOrder {
         if self.quantity > 0.0 {
             lock!(book.buy_orders).push(self);
         }
-        trades
+        (trades, completed_orders)
     }
 }
 
 impl MatchOrders for SellOrder {
-    fn match_order(mut self, book: &OrderBook) -> Vec<Trade> {
+    fn match_order(mut self, book: &OrderBook) -> (Vec<Trade>, Vec<OrderId>) {
         let mut trades = vec![];
+        let mut completed_orders = vec![];
 
         if self.quantity == 0.0 {
-            return trades;
+            return (trades, completed_orders);
         }
 
         {
             let mut buy_orders = lock!(book.buy_orders);
 
             // Buy orders are sorted from highest to lowest in price
+
             while let Some(mut buy_order) = buy_orders.pop() {
                 if self.price > buy_order.price {
                     // No match. The best buy price (highest) exceeds
                     // the ask price (which is too high).
+                    buy_orders.push(buy_order); // TODO: avoid pop() and push()
                     break;
                 }
 
@@ -98,10 +107,13 @@ impl MatchOrders for SellOrder {
                 // If the sell order still has some quantity
                 if self.quantity.abs() > f64::EPSILON {
                     buy_orders.push(buy_order);
+                } else {
+                    completed_orders.push(*buy_order.get_id());
                 }
 
                 if self.quantity.abs() < f64::EPSILON {
-                    return trades;
+                    completed_orders.push(*self.get_id());
+                    return (trades, completed_orders);
                 }
             }
         } // Release buy_orders lock
@@ -110,7 +122,7 @@ impl MatchOrders for SellOrder {
             lock!(book.sell_orders).push(self);
         }
 
-        trades
+        (trades, completed_orders)
     }
 }
 

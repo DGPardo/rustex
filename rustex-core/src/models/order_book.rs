@@ -1,4 +1,7 @@
-use std::{collections::BinaryHeap, sync::Mutex};
+use std::{
+    collections::{BinaryHeap, HashSet},
+    sync::Mutex,
+};
 
 use crate::{lock, order_matching::MatchOrders};
 
@@ -19,6 +22,7 @@ use super::{
 pub struct OrderBook {
     pub(crate) buy_orders: Mutex<BinaryHeap<BuyOrder>>, // Max-heap. Highest price at the root
     pub(crate) sell_orders: Mutex<BinaryHeap<SellOrder>>, // Min-heap. Lowest price at the root
+    pending_orders: Mutex<HashSet<OrderId>>,            // Orders being processed
     order_counter: Mutex<OrderId>,                      // TODO: Perhaps AtomicU64 is enough?
     trade_counter: Mutex<TradeId>,                      // TODO: Perhaps AtomicU64 is enough?
 }
@@ -32,12 +36,24 @@ impl OrderBook {
         lock!(self.trade_counter).fetch_increment()
     }
 
+    fn process_order<T: From<Order> + MatchOrders>(&self, order: Order) -> Vec<Trade> {
+        lock!(self.pending_orders).insert(order.id);
+        let order = T::from(order);
+        let (trades, completed_orders) = order.match_order(self);
+
+        let mut pending = lock!(self.pending_orders);
+        completed_orders.into_iter().for_each(|oid| {
+            pending.remove(&oid);
+        });
+        trades
+    }
+
     pub fn insert_buy_order(
         &self,
         user_id: UserId,
         price: u64,
         quantity: f64,
-        time: EpochTime,
+        unix_epoch: EpochTime,
     ) -> (OrderId, Vec<Trade>) {
         let order_id = self.fetch_next_order_id();
         let order = Order {
@@ -45,10 +61,9 @@ impl OrderBook {
             user_id,
             price,
             quantity,
-            unix_epoch: time,
+            unix_epoch,
         };
-        let trades = BuyOrder::from(order).match_order(self);
-        (order_id, trades)
+        (order_id, self.process_order::<BuyOrder>(order))
     }
 
     pub fn insert_sell_order(
@@ -66,8 +81,7 @@ impl OrderBook {
             quantity,
             unix_epoch: time,
         };
-        let trades = SellOrder::from(order).match_order(self);
-        (order_id, trades)
+        (order_id, self.process_order::<SellOrder>(order))
     }
 
     pub fn make_trade(

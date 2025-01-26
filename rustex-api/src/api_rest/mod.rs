@@ -1,17 +1,15 @@
-use std::{
-    fs::File,
-    io::BufReader,
-    sync::{Arc, LazyLock},
-};
+use std::{fs::File, io::BufReader, sync::LazyLock};
 
 use actix_web::{web, App, HttpServer};
 use state::AppState;
+
+use crate::auth::JwtMiddleware;
 
 mod handlers;
 mod routes;
 mod state;
 
-const DEFAULT_ADDRESS: &str = "127.0.0.1";
+const DEFAULT_ADDRESS: &str = "0.0.0.0";
 const DEFAULT_PORT: &str = "5000";
 
 static SERVER_ADDRESS: LazyLock<Box<str>> = LazyLock::new(|| {
@@ -29,9 +27,9 @@ static SERVER_PORT: LazyLock<Box<str>> = LazyLock::new(|| {
 /// TLS-Enabled HTTP Server as described by the actix-web documentation
 /// Reference: https://actix.rs/docs/http2/
 /// This function will panics if it cannot create the server
-pub async fn launch_http_server() {
-    let mut certs_file = BufReader::new(File::open("cert.pem").unwrap());
-    let mut key_file = BufReader::new(File::open("key.pem").unwrap());
+pub async fn launch_http_server() -> anyhow::Result<()> {
+    let mut certs_file = BufReader::new(File::open("cert.pem")?);
+    let mut key_file = BufReader::new(File::open("key.pem")?);
 
     let tls_certs = rustls_pemfile::certs(&mut certs_file)
         .collect::<Result<Vec<_>, _>>()
@@ -51,6 +49,7 @@ pub async fn launch_http_server() {
     let result = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::clone(&app_state))
+            .wrap(JwtMiddleware {})
             .service(routes::get_api_service())
     })
     .bind_rustls_0_23(format!("{}:{}", *SERVER_ADDRESS, *SERVER_PORT), tls_config)
@@ -62,4 +61,6 @@ pub async fn launch_http_server() {
     if let Err(result) = result {
         log::error!("HttpServer errored: {:?}", result)
     }
+
+    Ok(())
 }

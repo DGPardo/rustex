@@ -6,4 +6,5 @@ edition = "2021"
 
 [dependencies]
 log = { workspace = true }
+paste = "1.0.15"
 serde = { workspace = true }

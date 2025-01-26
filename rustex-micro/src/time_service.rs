@@ -49,6 +49,8 @@ impl TimeService for TimeServer {
 
 #[tokio::main]
 pub async fn main() {
+    env_logger::init();
+
     let mut listener = tarpc::serde_transport::tcp::listen(*ADDRESS, Json::default)
         .await
         .unwrap();

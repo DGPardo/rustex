@@ -38,14 +38,17 @@ pub trait MatchService {
         user: UserId,
         price: u64,
         quantity: f64,
-        time: EpochTime,
+        unix_epoch: EpochTime,
     ) -> (OrderId, Vec<Trade>);
+
     async fn insert_sell_order(
         user: UserId,
         price: u64,
         quantity: f64,
         time: EpochTime,
     ) -> (OrderId, Vec<Trade>);
+
+    async fn get_order_progress(user: UserId, order_id: OrderId) -> (bool, f64); // (is_pending, quantity_left)
 }
 
 #[derive(Clone)]
@@ -58,9 +61,10 @@ impl MatchService for MatchingServer {
         user_id: UserId,
         price: u64,
         quantity: f64,
-        time: EpochTime,
+        unix_epoch: EpochTime,
     ) -> (OrderId, Vec<Trade>) {
-        self.0.insert_buy_order(user_id, price, quantity, time)
+        self.0
+            .insert_buy_order(user_id, price, quantity, unix_epoch)
     }
 
     async fn insert_sell_order(
@@ -73,10 +77,22 @@ impl MatchService for MatchingServer {
     ) -> (OrderId, Vec<Trade>) {
         self.0.insert_sell_order(user_id, price, quantity, time)
     }
+
+    async fn get_order_progress(
+        self,
+        _: Context,
+        _user: UserId,
+        _order_id: OrderId,
+    ) -> (/*is pending=*/ bool, /*quantity left=*/ f64) {
+        // TODO: Slow Path -> Query Database and do not block book matching progress
+        (false, 0.0)
+    }
 }
 
 #[tokio::main]
 pub async fn main() {
+    env_logger::init();
+
     let mut listener = tarpc::serde_transport::tcp::listen(*ADDRESS, Json::default)
         .await
         .unwrap();
@@ -88,7 +104,6 @@ pub async fn main() {
 
     listener.config_mut().max_frame_length(u32::MAX as usize);
     listener
-        // Ignore accept errors.
         .filter_map(|r| future::ready(r.ok()))
         .map(server::BaseChannel::with_defaults)
         .map(|channel| channel.execute(state.clone().serve()).for_each(spawn))
