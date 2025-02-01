@@ -1,6 +1,8 @@
 use std::{fs::File, io::BufReader, sync::LazyLock};
 
 use actix_web::{web, App, HttpServer};
+use anyhow::Context;
+use rustls::ServerConfig;
 use state::AppState;
 
 use crate::auth::JwtMiddleware;
@@ -24,27 +26,28 @@ static SERVER_PORT: LazyLock<Box<str>> = LazyLock::new(|| {
         .unwrap_or_else(|_| DEFAULT_PORT.into())
 });
 
+fn get_tls_config() -> anyhow::Result<ServerConfig> {
+    let mut certs_file = BufReader::new(File::open("cert.pem").context("Failed to read cert.pem")?);
+    let mut key_file = BufReader::new(File::open("key.pem").context("Failed to read key.pem")?);
+
+    let tls_certs = rustls_pemfile::certs(&mut certs_file)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if let Some(tls_key) = rustls_pemfile::pkcs8_private_keys(&mut key_file).next() {
+        // set up TLS config options
+        let tls_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key?))?;
+        return Ok(tls_config);
+    }
+    Err(anyhow::Error::msg("Failed to parse pkcs8 key"))
+}
+
 /// TLS-Enabled HTTP Server as described by the actix-web documentation
 /// Reference: https://actix.rs/docs/http2/
 /// This function will panics if it cannot create the server
 pub async fn launch_http_server() -> anyhow::Result<()> {
-    let mut certs_file = BufReader::new(File::open("cert.pem")?);
-    let mut key_file = BufReader::new(File::open("key.pem")?);
-
-    let tls_certs = rustls_pemfile::certs(&mut certs_file)
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
-    let tls_key = rustls_pemfile::pkcs8_private_keys(&mut key_file)
-        .next()
-        .unwrap()
-        .unwrap();
-
-    // set up TLS config options
-    let tls_config = rustls::ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(tls_key))
-        .unwrap();
-
+    let tls_config = get_tls_config()?;
     let app_state = web::Data::new(AppState::new().await.unwrap());
     let result = HttpServer::new(move || {
         App::new()
