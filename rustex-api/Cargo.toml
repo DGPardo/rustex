@@ -11,17 +11,17 @@ default = ["rest_api"]
 
 [dependencies]
 actix-web = { version = "4.9.0", optional = true, features = ["rustls-0_23"] }
+anyhow = { workspace = true }
 env_logger = { workspace = true }
+futures-util = { workspace = true }
+jsonwebtoken = "9.3.0"
 log = { workspace = true }
-rustex-micro = { workspace = true }
 rustex-core = { workspace = true }
+rustex-micro = { workspace = true }
 rustls = { version = "0.23", optional = true }
 rustls-pemfile = "2.2.0"
 serde = { workspace = true }
 serde_json = "1.0.135"
-tarpc = { version = "0.35.0", features = ["full"] }
+tarpc = { workspace = true }
 tokio = { workspace = true }
-anyhow = "1.0.95"
-jsonwebtoken = "9.3.0"
-futures-util = "0.3.31"
 

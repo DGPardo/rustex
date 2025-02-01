@@ -63,11 +63,11 @@ define_struct_with_getters!(
     /// Defines an order (either buy or sell order)
     pub struct Order {
         /// This will be unique and always increasing number
-        pub(crate) id: OrderId,
-        pub(crate) user_id: UserId,
-        pub(crate) price: u64, // working with cents
-        pub(crate) quantity: f64,
-        pub(crate) unix_epoch: EpochTime,
+        pub id: OrderId,
+        pub user_id: UserId,
+        pub price: u64, // working with cents
+        pub quantity: f64,
+        pub unix_epoch: EpochTime,
     }
 );
 

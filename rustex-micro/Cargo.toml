@@ -17,11 +17,11 @@ name = "match-service"
 path = "src/match_service.rs"
 
 [dependencies]
-anyhow = "1.0.95"
+anyhow = { workspace = true }
 env_logger = { workspace = true }
-futures = "0.3.31"
+futures = { workspace = true }
 log = { workspace = true }
-paste = "1.0.15"
+paste = { workspace = true }
 rustex-core = { workspace = true }
-tarpc = { version = "0.35.0", features = ["full"] }
+tarpc = { workspace = true }
 tokio = { workspace = true }

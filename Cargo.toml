@@ -7,11 +7,18 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-env_logger = "0.11.6"
-log = "0.4.25"
 rustex-core = { path = "./rustex-core" }
 rustex-api = { path = "./rustex-api" }
 rustex-micro = { path = "./rustex-micro" }
-serde = { version = "1.0.217", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
 
+# If more than one crate shares a dependency
+# then make it a workspace dependency
+anyhow = "1.0.95"
+env_logger = "0.11.6"
+futures = "0.3.31"
+futures-util = "0.3.31"
+log = "0.4.25"
+paste = "1.0.15"
+serde = { version = "1.0.217", features = ["derive"] }
+tarpc = { version = "0.35.0", features = ["full"] }
+tokio = { version = "1", features = ["full"] }

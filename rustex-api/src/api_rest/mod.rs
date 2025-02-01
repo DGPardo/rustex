@@ -14,13 +14,13 @@ const DEFAULT_PORT: &str = "5000";
 
 static SERVER_ADDRESS: LazyLock<Box<str>> = LazyLock::new(|| {
     std::env::var("SERVER_ADDRESS")
-        .map(|addr| addr.into_boxed_str())
+        .map(|addr| addr.into())
         .unwrap_or_else(|_| DEFAULT_ADDRESS.into())
 });
 
 static SERVER_PORT: LazyLock<Box<str>> = LazyLock::new(|| {
     std::env::var("SERVER_PORT")
-        .map(|port| port.into_boxed_str())
+        .map(|port| port.into())
         .unwrap_or_else(|_| DEFAULT_PORT.into())
 });
 
