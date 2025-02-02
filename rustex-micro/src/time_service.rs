@@ -1,5 +1,7 @@
+use dotenvy::dotenv;
 use futures::{future, StreamExt};
 use rustex_core::prelude::EpochTime;
+use rustex_errors::RustexError;
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr},
@@ -12,8 +14,8 @@ use tarpc::{
     tokio_serde::formats::Json,
 };
 
-const DEFAULT_ADDRESS: &str = "0.0.0.0";
-const DEFAULT_PORT: u16 = 5555;
+const DEFAULT_ADDRESS: &str = "127.0.0.1";
+const DEFAULT_PORT: u16 = 7777;
 const DEFAULT_MAX_NUMBER_CO_CONNECTIONS: usize = 10_000;
 
 static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
@@ -35,27 +37,31 @@ static MAX_NUMBER_CO_CONNECTIONS: LazyLock<usize> = LazyLock::new(|| {
 #[tarpc::service]
 pub trait TimeService {
     /// Returns the order id
-    async fn get_time() -> Result<EpochTime, Box<str>>;
+    async fn get_time() -> Result<EpochTime, RustexError>;
 }
 
 #[derive(Clone)]
 pub struct TimeServer; // stateless
 
 impl TimeService for TimeServer {
-    async fn get_time(self, _: Context) -> Result<EpochTime, Box<str>> {
-        EpochTime::now().map_err(|e| format!("{:?}", e).into_boxed_str())
+    async fn get_time(self, _: Context) -> Result<EpochTime, RustexError> {
+        Ok(EpochTime::now()?)
     }
 }
 
 #[tokio::main]
 pub async fn main() {
-    env_logger::init();
+    dotenv().unwrap();
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    start_service().await
+}
 
+pub async fn start_service() {
     let mut listener = tarpc::serde_transport::tcp::listen(*ADDRESS, Json::default)
         .await
         .unwrap();
 
-    log::info!("Time Service RPC listening on: {:?}", ADDRESS);
+    log::info!("Time Service:: RPC listening on: {:?}", ADDRESS);
 
     listener.config_mut().max_frame_length(u32::MAX as usize);
     listener

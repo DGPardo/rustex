@@ -52,11 +52,11 @@ impl MatchOrders for BuyOrder {
                 if sell_order.quantity.abs() > f64::EPSILON {
                     sell_orders.push(sell_order);
                 } else {
-                    completed_orders.push(*sell_order.get_id());
+                    completed_orders.push(sell_order.id);
                 }
 
                 if self.quantity.abs() < f64::EPSILON {
-                    completed_orders.push(*self.get_id());
+                    completed_orders.push(self.id);
                     return (trades, completed_orders);
                 }
             }
@@ -108,11 +108,11 @@ impl MatchOrders for SellOrder {
                 if self.quantity.abs() > f64::EPSILON {
                     buy_orders.push(buy_order);
                 } else {
-                    completed_orders.push(*buy_order.get_id());
+                    completed_orders.push(buy_order.id);
                 }
 
                 if self.quantity.abs() < f64::EPSILON {
-                    completed_orders.push(*self.get_id());
+                    completed_orders.push(self.id);
                     return (trades, completed_orders);
                 }
             }
@@ -137,15 +137,15 @@ mod tests {
 
         let now = EpochTime::now().unwrap();
         let (order_id, trades) = book.insert_sell_order(123.into(), 50, 10.0, now);
-        assert_eq!(order_id, 0u128.into());
+        assert_eq!(order_id, 0.into());
         assert!(trades.is_empty());
 
         let (order_id, trades) = book.insert_sell_order(456.into(), 45, 5.0, now);
-        assert_eq!(order_id, 1u128.into());
+        assert_eq!(order_id, 1.into());
         assert!(trades.is_empty());
 
         let (order_id, trades) = book.insert_buy_order(2.into(), 50, 8.0, now);
-        assert_eq!(order_id, 2u128.into());
+        assert_eq!(order_id, 2.into());
 
         assert_eq!(
             trades,

@@ -6,7 +6,7 @@ use super::{EpochTime, UserId};
 #[derive(
     Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Default, Clone, Copy, Hash,
 )]
-pub struct OrderId(u128);
+pub struct OrderId(i64);
 
 impl OrderId {
     pub fn fetch_increment(&mut self) -> OrderId {
@@ -16,60 +16,28 @@ impl OrderId {
     }
 }
 
-impl From<u128> for OrderId {
-    fn from(value: u128) -> Self {
+impl From<i64> for OrderId {
+    fn from(value: i64) -> Self {
         Self(value)
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuyOrder(Order);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SellOrder(Order);
 
-macro_rules! define_struct_with_getters {
-    (
-        $(#[$meta:meta])*
-        $vis:vis struct $name:ident {
-            $(
-                $(#[$field_meta:meta])*
-                $field_vis:vis $field_name:ident: $field_ty:ty
-            ),* $(,)?
-        }
-    ) => {
-        $(#[$meta])*
-        #[derive(Debug, Serialize, Deserialize)]
-        $vis struct $name {
-            $(
-                $(#[$field_meta])*
-                $field_vis $field_name: $field_ty
-            ),*
-        }
-
-        paste::paste! {
-            impl $name {
-                $(
-                    pub fn [< get_ $field_name >](&self) -> &$field_ty {
-                        &self.$field_name
-                    }
-                )*
-            }
-        }
-    };
+/// Defines an order (either buy or sell order)
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Order {
+    /// This will be unique and always increasing number
+    pub id: OrderId,
+    pub user_id: UserId,
+    pub price: i64, // working with cents
+    pub quantity: f64,
+    pub unix_epoch: EpochTime,
 }
-
-define_struct_with_getters!(
-    /// Defines an order (either buy or sell order)
-    pub struct Order {
-        /// This will be unique and always increasing number
-        pub id: OrderId,
-        pub user_id: UserId,
-        pub price: u64, // working with cents
-        pub quantity: f64,
-        pub unix_epoch: EpochTime,
-    }
-);
 
 impl Eq for Order {}
 

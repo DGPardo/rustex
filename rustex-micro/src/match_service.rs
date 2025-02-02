@@ -1,3 +1,4 @@
+use dotenvy::dotenv;
 use futures::{future, StreamExt};
 use rustex_core::prelude::{EpochTime, OrderBook, OrderId, Trade, UserId};
 use std::{
@@ -12,7 +13,7 @@ use tarpc::{
     tokio_serde::formats::Json,
 };
 
-const DEFAULT_ADDRESS: &str = "0.0.0.0";
+const DEFAULT_ADDRESS: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 5555;
 const DEFAULT_MAX_NUMBER_CO_CONNECTIONS: usize = 10_000;
 
@@ -36,14 +37,14 @@ static MAX_NUMBER_CO_CONNECTIONS: LazyLock<usize> = LazyLock::new(|| {
 pub trait MatchService {
     async fn insert_buy_order(
         user: UserId,
-        price: u64,
+        price: i64,
         quantity: f64,
         unix_epoch: EpochTime,
     ) -> (OrderId, Vec<Trade>);
 
     async fn insert_sell_order(
         user: UserId,
-        price: u64,
+        price: i64,
         quantity: f64,
         time: EpochTime,
     ) -> (OrderId, Vec<Trade>);
@@ -59,7 +60,7 @@ impl MatchService for MatchingServer {
         self,
         _: Context,
         user_id: UserId,
-        price: u64,
+        price: i64,
         quantity: f64,
         unix_epoch: EpochTime,
     ) -> (OrderId, Vec<Trade>) {
@@ -71,7 +72,7 @@ impl MatchService for MatchingServer {
         self,
         _: Context,
         user_id: UserId,
-        price: u64,
+        price: i64,
         quantity: f64,
         time: EpochTime,
     ) -> (OrderId, Vec<Trade>) {
@@ -91,13 +92,17 @@ impl MatchService for MatchingServer {
 
 #[tokio::main]
 pub async fn main() {
-    env_logger::init();
+    dotenv().unwrap();
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    start_service().await;
+}
 
+pub async fn start_service() {
     let mut listener = tarpc::serde_transport::tcp::listen(*ADDRESS, Json::default)
         .await
         .unwrap();
 
-    log::info!("Orders RPC listening on: {:?}", ADDRESS);
+    log::info!("Orders RPC:: listening on: {:?}", ADDRESS);
 
     // TODO: Gather order book from database
     let state = MatchingServer(Arc::new(OrderBook::default()));

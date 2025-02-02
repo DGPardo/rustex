@@ -26,7 +26,7 @@ pub struct Trade {
     pub(crate) id: TradeId,
     pub(crate) buy_order_id: OrderId,
     pub(crate) sell_order_id: OrderId,
-    pub(crate) price: u64,
+    pub(crate) price: i64,
     pub(crate) quantity: f64,
 }
 

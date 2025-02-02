@@ -7,11 +7,17 @@ pub mod orders;
 pub mod trade;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UserId(u64);
+pub struct UserId(i64);
 
-impl From<u64> for UserId {
-    fn from(value: u64) -> Self {
+impl From<i64> for UserId {
+    fn from(value: i64) -> Self {
         UserId(value)
+    }
+}
+
+impl UserId {
+    pub fn into_inner(self) -> i64 {
+        self.0
     }
 }
 
@@ -23,5 +29,9 @@ impl EpochTime {
         SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map(|duration| Self(duration.as_nanos()))
+    }
+
+    pub fn into_inner(self) -> u128 {
+        self.0
     }
 }

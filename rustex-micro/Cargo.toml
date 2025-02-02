@@ -9,19 +9,28 @@ name = "rpc_clients"
 path = "src/lib.rs"
 
 [[bin]]
-name = "time-service"
-path = "src/time_service.rs"
+name = "db-service"
+path = "src/db_service.rs"
 
 [[bin]]
 name = "match-service"
 path = "src/match_service.rs"
 
+[[bin]]
+name = "time-service"
+path = "src/time_service.rs"
+
 [dependencies]
 anyhow = { workspace = true }
+diesel = { workspace = true }
+diesel-async = { workspace = true }
+dotenvy = { workspace = true }
 env_logger = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
 rustex-core = { workspace = true }
+rustex-errors = { workspace = true }
 tarpc = { workspace = true }
 tokio = { workspace = true }
+uuid = { workspace = true }

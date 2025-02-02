@@ -1,13 +1,16 @@
 use crate::api_rest::handlers::*;
 use actix_web::{web, Scope};
 
-pub fn get_api_service() -> Scope {
+pub fn get_public_api_service() -> Scope {
+    web::scope("/v1/public")
+        .route("/health", web::get().to(health::service_health))
+        .route("/login", web::post().to(users::login)) // TODO
+}
+
+pub fn get_protected_api_service() -> Scope {
     web::scope("/v1")
         .route("/health", web::get().to(health::service_health))
         .route("/orders/buy", web::post().to(orders::insert_buy_order))
         .route("/orders/sell", web::post().to(orders::insert_sell_order))
         .route("/orders/{order_id}", web::get().to(orders::get_order_state))
-
-    // .route("/users", web::post().to(handle_new_order))
-    // .route("/users", web::get().to(handle_fetch_orders))
 }

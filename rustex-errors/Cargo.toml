@@ -1,12 +1,12 @@
 [package]
-name = "rustex-core"
+name = "rustex-errors"
 version = "0.0.0"
-authors = ["Diego Pardo"]
 edition = "2021"
 
 [dependencies]
+actix-web = { workspace = true }
 diesel = { workspace = true }
+diesel-async = { workspace = true }
 log = { workspace = true }
-paste = { workspace = true }
 serde = { workspace = true }
-uuid = { workspace = true }
+tarpc = { workspace = true }

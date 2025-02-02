@@ -51,7 +51,7 @@ impl OrderBook {
     pub fn insert_buy_order(
         &self,
         user_id: UserId,
-        price: u64,
+        price: i64,
         quantity: f64,
         unix_epoch: EpochTime,
     ) -> (OrderId, Vec<Trade>) {
@@ -69,7 +69,7 @@ impl OrderBook {
     pub fn insert_sell_order(
         &self,
         user_id: UserId,
-        price: u64,
+        price: i64,
         quantity: f64,
         time: EpochTime,
     ) -> (OrderId, Vec<Trade>) {
@@ -88,7 +88,7 @@ impl OrderBook {
         &self,
         buy_order_id: OrderId,
         sell_order_id: OrderId,
-        price: u64,
+        price: i64,
         quantity: f64,
     ) -> Trade {
         Trade {

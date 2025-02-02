@@ -1,19 +1,27 @@
 [workspace]
 members = [
-    "rustex-core",
     "rustex-api",
+    "rustex-core",
+    "rustex-errors",
     "rustex-micro",
+
 ]
 resolver = "2"
 
 [workspace.dependencies]
-rustex-core = { path = "./rustex-core" }
 rustex-api = { path = "./rustex-api" }
+rustex-core = { path = "./rustex-core" }
+rustex-errors = { path = "./rustex-errors" }
 rustex-micro = { path = "./rustex-micro" }
+tests = { path = "./tests" }
 
 # If more than one crate shares a dependency
 # then make it a workspace dependency
+actix-web = { version = "4.9.0", features = ["rustls-0_23"] }
 anyhow = "1.0.95"
+diesel = { version = "2.2.7", features = ["postgres", "uuid"] }
+diesel-async = { version = "0.5.2", features = ["postgres", "deadpool"] }
+dotenvy = "0.15.7"
 env_logger = "0.11.6"
 futures = "0.3.31"
 futures-util = "0.3.31"
@@ -22,3 +30,4 @@ paste = "1.0.15"
 serde = { version = "1.0.217", features = ["derive"] }
 tarpc = { version = "0.35.0", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.12.1", features = ["v4", "serde"] }

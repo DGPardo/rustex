@@ -1,6 +1,8 @@
+pub mod db_service;
 pub mod match_service;
 pub mod time_service;
 
+use db_service::DbServiceClient;
 use match_service::MatchServiceClient;
 use time_service::TimeServiceClient;
 
@@ -23,4 +25,4 @@ macro_rules! generate_client {
     };
 }
 
-generate_client!(TimeServiceClient, MatchServiceClient);
+generate_client!(TimeServiceClient, MatchServiceClient, DbServiceClient);
