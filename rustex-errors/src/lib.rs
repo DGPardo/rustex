@@ -15,7 +15,6 @@ pub enum RustexError {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum InternalServerError {
     DbServiceError(RustexInternalError),
-    TimeServiceError(RustexInternalError),
     MatchServiceError(RustexInternalError),
 }
 
@@ -81,7 +80,7 @@ impl actix_web::ResponseError for RustexError {
 // Implementation on Foreign Data Types
 impl From<SystemTimeError> for RustexError {
     fn from(value: SystemTimeError) -> Self {
-        RustexError::InternalServerError(InternalServerError::TimeServiceError(
+        RustexError::InternalServerError(InternalServerError::MatchServiceError(
             RustexInternalError::from(format!("SystemTimeError:: {:?}", value)),
         ))
     }
@@ -89,7 +88,7 @@ impl From<SystemTimeError> for RustexError {
 
 impl From<tarpc::client::RpcError> for RustexError {
     fn from(value: tarpc::client::RpcError) -> Self {
-        RustexError::InternalServerError(InternalServerError::TimeServiceError(
+        RustexError::InternalServerError(InternalServerError::MatchServiceError(
             RustexInternalError::from(format!("tarpc::client::RpcError:: {:?}", value)),
         ))
     }
@@ -137,6 +136,14 @@ impl From<tokio::task::JoinError> for RustexError {
     fn from(value: tokio::task::JoinError) -> Self {
         RustexError::InternalServerError(InternalServerError::DbServiceError(
             RustexInternalError::from(format!("tokio::task::JoinError:: {:?}", value)),
+        ))
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for RustexError {
+    fn from(value: jsonwebtoken::errors::Error) -> Self {
+        RustexError::InternalServerError(InternalServerError::DbServiceError(
+            RustexInternalError::from(format!("jsonwebtoken::errors::Error:: {:?}", value)),
         ))
     }
 }

@@ -1,5 +1,10 @@
+use chrono::{DateTime, Utc};
+use jsonwebtoken as jwt;
 use rustex_core::prelude::UserId;
+use rustex_errors::RustexError;
 use serde::{Deserialize, Serialize};
+
+use super::JWT_SECRET_KEY;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -9,24 +14,23 @@ pub struct Claims {
     pub role: Option<String>,
 }
 
-// pub fn generate_jwt_token(
-//     curr_time: EpochTime,
-//     user_id: UserId,
-//     email: Option<String>,
-//     role: Option<String>,
-// ) -> anyhow::Result<String> {
-//     let expiration = curr_time.into_inner() + 3600; // Expiration time (1 hour from now)
+pub fn generate_jwt_token(
+    curr_time: DateTime<Utc>,
+    user_id: UserId,
+    email: Option<String>,
+    role: Option<String>,
+) -> Result<String, RustexError> {
+    let expiration = curr_time.timestamp() as u128 + 3600; // Expiration time (1 hour from now)
+    let claims = Claims {
+        sub: user_id,
+        exp: expiration,
+        email,
+        role,
+    };
 
-//     let claims = Claims {
-//         sub: user_id,
-//         exp: expiration,
-//         email,
-//         role,
-//     };
-
-//     Ok(jwt::encode(
-//         &jwt::Header::default(),
-//         &claims,
-//         &jwt::EncodingKey::from_secret(JWT_SECRET_KEY.as_ref()),
-//     )?)
-// }
+    Ok(jwt::encode(
+        &jwt::Header::default(),
+        &claims,
+        &jwt::EncodingKey::from_secret(JWT_SECRET_KEY.as_ref()),
+    )?)
+}

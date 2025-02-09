@@ -2189,6 +2189,7 @@ version = "0.0.0"
 dependencies = [
  "actix-web",
  "anyhow",
+ "chrono",
  "dotenvy",
  "env_logger",
  "futures-util",
@@ -2225,6 +2226,7 @@ dependencies = [
  "actix-web",
  "diesel",
  "diesel-async",
+ "jsonwebtoken",
  "log",
  "serde",
  "tarpc",

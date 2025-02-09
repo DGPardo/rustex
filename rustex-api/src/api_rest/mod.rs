@@ -1,6 +1,6 @@
 use std::{fs::File, io::BufReader, sync::LazyLock};
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use anyhow::Context;
 use rustls::ServerConfig;
 use state::AppState;
@@ -11,7 +11,7 @@ mod handlers;
 mod routes;
 mod state;
 
-const DEFAULT_ADDRESS: &str = "127.0.0.1";
+const DEFAULT_ADDRESS: &str = "0.0.0.0";
 const DEFAULT_PORT: &str = "5000";
 
 static SERVER_ADDRESS: LazyLock<Box<str>> = LazyLock::new(|| {
@@ -27,10 +27,20 @@ static SERVER_PORT: LazyLock<Box<str>> = LazyLock::new(|| {
 });
 
 fn get_tls_config() -> anyhow::Result<ServerConfig> {
-    let mut certs_file =
-        BufReader::new(File::open("../tls_certs/cert.pem").context("Failed to read cert.pem")?);
-    let mut key_file =
-        BufReader::new(File::open("../tls_certs/key.pem").context("Failed to read key.pem")?);
+    let mut certs_file = BufReader::new(
+        File::open(
+            std::env::var("TLS_CERT_PATH")
+                .context("TLS_CERT_PATH environment variable is not set")?,
+        )
+        .context("Failed to read cert.pem")?,
+    );
+    let mut key_file = BufReader::new(
+        File::open(
+            std::env::var("TLS_KEY_PATH")
+                .context("TLS_KEY_PATH environment variable is not set")?,
+        )
+        .context("Failed to read key.pem")?,
+    );
 
     let tls_certs = rustls_pemfile::certs(&mut certs_file).collect::<Result<Vec<_>, _>>()?;
 
@@ -58,11 +68,14 @@ pub async fn launch_http_server() -> anyhow::Result<()> {
     let app_state = web::Data::new(AppState::new().await?);
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             .app_data(web::Data::clone(&app_state))
             .service(routes::get_public_api_service())
             .service(routes::get_protected_api_service().wrap(JwtMiddleware))
+        // .service(routes::get_protected_api_service())
     })
     .bind_rustls_0_23(format!("{}:{}", *SERVER_ADDRESS, *SERVER_PORT), tls_config)
+    // .bind(format!("{}:{}", *SERVER_ADDRESS, *SERVER_PORT))
     .unwrap()
     .workers(4)
     .run()
@@ -75,13 +88,12 @@ pub async fn launch_http_server() -> anyhow::Result<()> {
 mod test {
     use super::*;
     use dotenvy::dotenv;
-    use rpc_clients::{db_service, match_service, time_service};
+    use rpc_clients::{db_service, match_service};
     use std::{future::Future, time::Duration};
 
     async fn with_services(inner: impl Future<Output = ()>) {
         dotenv().unwrap();
         let db_micro_service = tokio::spawn(db_service::start_service());
-        let time_micro_service = tokio::spawn(time_service::start_service());
         let match_micro_service = tokio::spawn(match_service::start_service());
         let http_server = tokio::spawn(launch_http_server());
 
@@ -92,9 +104,6 @@ mod test {
         if http_server.is_finished() {
             println!("Server should still be running")
         }
-        if time_micro_service.is_finished() {
-            println!("time micro-service should still be running")
-        }
         if match_micro_service.is_finished() {
             println!("match micro-service should still be running")
         }
@@ -104,7 +113,6 @@ mod test {
 
         http_server.abort();
         match_micro_service.abort();
-        time_micro_service.abort();
         db_micro_service.abort();
     }
 

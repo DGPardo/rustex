@@ -4,5 +4,5 @@ pub use crate::models::{
     order_book::OrderBook,
     orders::{BuyOrder, Order, OrderId, SellOrder},
     trade::{Trade, TradeId},
-    EpochTime, UserId,
+    UserId,
 };

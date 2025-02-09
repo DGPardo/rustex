@@ -6,5 +6,6 @@ CREATE TABLE trades
     price bigserial NOT NULL,
     quantity double precision NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
+
     PRIMARY KEY ("trade_id")
 );

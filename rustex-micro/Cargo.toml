@@ -16,10 +16,6 @@ path = "src/services/db_service.rs"
 name = "match-service"
 path = "src/services/match_service.rs"
 
-[[bin]]
-name = "time-service"
-path = "src/services/time_service.rs"
-
 [dependencies]
 anyhow = { workspace = true }
 diesel = { workspace = true }

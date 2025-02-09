@@ -1,12 +1,16 @@
-use actix_web::{web, Result};
+use actix_web::web;
+use chrono::Utc;
+use rustex_errors::RustexError;
 use serde::Deserialize;
 
-use crate::api_rest::state::AppState;
+use crate::{api_rest::state::AppState, auth};
 
 #[derive(Deserialize)]
 pub struct Credentials {
-    _username: String,
-    _hashed_password: String, // TODO: Salt + Nonce
+    #[allow(dead_code)]
+    username: String,
+    #[allow(dead_code)]
+    hashed_password: String, // TODO: Salt + Nonce
 }
 
 type JwtToken = String;
@@ -14,8 +18,13 @@ type JwtToken = String;
 pub async fn login(
     _state: web::Data<AppState>,
     _credentials: web::Json<Credentials>,
-) -> Result<JwtToken> {
-    unimplemented!("Add dependency from third-party provider")
+) -> Result<JwtToken, RustexError> {
+    // TODO: Use third-party identity provider
+
+    let now = Utc::now();
+    let token = auth::generate_jwt_token(now, 0.into(), None, None)?;
+    Ok(token)
+
     // let credentials = credentials.into_inner();
 
     // // Fetch current time and validate login concurrently

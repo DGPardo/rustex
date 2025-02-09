@@ -1,5 +1,6 @@
 services:
   db:
+    profiles: [debug, db]
     image: postgres
     restart: always
     shm_size: 128mb
@@ -11,8 +12,56 @@ services:
       POSTGRES_USER: ${PG_USERNAME}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
 
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
     volumes:
       - rustex_pg:/var/lib/postgresql/data
+
+  backend-api:
+    profiles: [debug, api]
+    image: backend/rest-api
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    volumes:
+      - ./tls_certs:/tls_certs
+    environment:
+      TLS_CERT_PATH: tls_certs/cert.pem
+      TLS_KEY_PATH: tls_certs/key.pem
+      MATCH_RPC_ADDRESS: "backend-match-micro"
+      SERVER_ADDRESS: "0.0.0.0"
+      SERVER_PORT: "5000"
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+
+  backend-db-micro:
+    profiles: [debug, db-service]
+    image: backend/microservices
+    build:
+      context: .
+      dockerfile: Dockerfile.micro
+    command: ["db-service"]
+    restart: unless-stopped
+    environment:
+      DATABASE_RPC_ADDRESS: "0.0.0.0"
+
+  backend-match-micro:
+    profiles: [debug, match-service]
+    image: backend/microservices
+    build:
+      context: .
+      dockerfile: Dockerfile.micro
+    command: ["match-service"]
+    restart: unless-stopped
+    environment:
+      DATABASE_RPC_ADDRESS: "backend-db-micro"
+      MATCH_RPC_ADDRESS: "0.0.0.0"
+
 
 volumes:
   rustex_pg:

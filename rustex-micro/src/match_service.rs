@@ -6,8 +6,6 @@ use rustex_core::prelude::{
 use rustex_errors::RustexError;
 use std::{
     future::Future,
-    net::{IpAddr, Ipv4Addr},
-    str::FromStr,
     sync::{Arc, LazyLock},
 };
 use tarpc::{
@@ -19,14 +17,14 @@ use tarpc::{
 use crate::{DEFAULT_ADDRESS, DEFAULT_MAX_NUMBER_CO_CONNECTIONS};
 const DEFAULT_PORT: u16 = 5555;
 
-pub static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
+pub static ADDRESS: LazyLock<String> = LazyLock::new(|| {
     let addr = std::env::var("MATCH_RPC_ADDRESS")
         .map(|addr| addr.into_boxed_str())
         .unwrap_or_else(|_| DEFAULT_ADDRESS.into());
     let port = std::env::var("MATCH_RPC_PORT")
         .map(|addr| addr.parse().unwrap())
         .unwrap_or_else(|_| DEFAULT_PORT);
-    (IpAddr::from(Ipv4Addr::from_str(&addr).unwrap()), port)
+    format!("{}:{}", addr, port)
 });
 
 static MAX_NUMBER_CO_CONNECTIONS: LazyLock<usize> = LazyLock::new(|| {
@@ -158,18 +156,28 @@ impl MatchService for MatchingServer {
 }
 
 pub async fn start_service() {
-    let mut listener = tarpc::serde_transport::tcp::listen(*ADDRESS, Json::default)
+    let mut listener = tarpc::serde_transport::tcp::listen(ADDRESS.clone(), Json::default)
         .await
         .unwrap();
 
     log::info!("Orders RPC:: listening on: {:?}", ADDRESS);
+
+    let db_rpc_client = get_db_service_client(DB_RPC_ADDRESS.clone())
+        .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to connect to db micro-service on address {:?}. Error: {:?}",
+                DB_RPC_ADDRESS, e
+            )
+        });
+    let db_rpc_client = Arc::new(db_rpc_client);
 
     // TODO: Gather order book from database
     // TODO: Specify which order book (by currency, etc...)
     let state = MatchingServer {
         exchange: ExchangeMarkets::BTC_USD, // TODO: Either Env Arg or CLI Arg
         order_book: Arc::new(OrderBook::default()),
-        db_rpc_client: Arc::new(get_db_service_client(*DB_RPC_ADDRESS).await.unwrap()),
+        db_rpc_client,
     };
 
     listener.config_mut().max_frame_length(u32::MAX as usize);

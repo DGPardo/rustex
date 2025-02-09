@@ -12,32 +12,26 @@ use rustex_core::{
     prelude::{BuyOrder, ExchangeMarkets, SellOrder, Trade},
 };
 use rustex_errors::RustexError;
-use std::{
-    future::Future,
-    net::{IpAddr, Ipv4Addr},
-    str::FromStr,
-    sync::LazyLock,
-};
+use std::{future::Future, sync::LazyLock};
 use tarpc::{context::Context, tokio_serde::formats::Json};
 
 use crate::{DEFAULT_ADDRESS, DEFAULT_MAX_NUMBER_CO_CONNECTIONS};
 
 const DEFAULT_PORT: u16 = 6666;
 
-pub static DATABASE_ADDRESS: LazyLock<Box<str>> = LazyLock::new(|| {
-    let addr = std::env::var("POSTGRES_ADDRESS")
-        .expect("POSTGRES_ADDRESS is not defined as an environment variable");
-    addr.into_boxed_str()
+pub static DATABASE_ADDRESS: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("POSTGRES_ADDRESS")
+        .expect("POSTGRES_ADDRESS is not defined as an environment variable")
 });
 
-pub static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
+pub static ADDRESS: LazyLock<String> = LazyLock::new(|| {
     let addr = std::env::var("DATABASE_RPC_ADDRESS")
         .map(|addr| addr.into_boxed_str())
         .unwrap_or_else(|_| DEFAULT_ADDRESS.into());
     let port = std::env::var("DATABASE_RPC_PORT")
-        .map(|addr| addr.parse().unwrap())
+        .map(|port| port.parse().unwrap())
         .unwrap_or_else(|_| DEFAULT_PORT);
-    (IpAddr::from(Ipv4Addr::from_str(&addr).unwrap()), port)
+    format!("{}:{}", addr, port)
 });
 
 static MAX_NUMBER_CO_CONNECTIONS: LazyLock<usize> = LazyLock::new(|| {
@@ -136,7 +130,7 @@ impl DbService for DbServer {
 }
 
 pub async fn start_service() {
-    let mut listener = tarpc::serde_transport::tcp::listen(*ADDRESS, Json::default)
+    let mut listener = tarpc::serde_transport::tcp::listen(ADDRESS.clone(), Json::default)
         .await
         .unwrap();
 

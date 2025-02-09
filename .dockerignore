@@ -1,2 +1,3 @@
 /tls_certs
-.env
+Dockerfile*
+docker-compose*

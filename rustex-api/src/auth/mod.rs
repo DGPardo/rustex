@@ -9,7 +9,7 @@ use actix_web::http::header::HeaderMap;
 use jsonwebtoken as jwt;
 use serde::Deserialize;
 
-pub use claims::Claims;
+pub use claims::{generate_jwt_token, Claims};
 pub use middleware::JwtMiddleware;
 
 static JWT_SECRET_KEY: LazyLock<String> = LazyLock::new(|| {

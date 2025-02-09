@@ -12,10 +12,11 @@ default = ["rest_api"]
 [dependencies]
 actix-web = { workspace = true, optional = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 dotenvy = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
-jsonwebtoken = "9.3.0"
+jsonwebtoken = { workspace = true }
 log = { workspace = true }
 rustex-core = { workspace = true }
 rustex-errors = { workspace = true }
