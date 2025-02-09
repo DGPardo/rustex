@@ -5,8 +5,9 @@ authors = ["Diego Pardo"]
 edition = "2021"
 
 [dependencies]
+chrono = { workspace = true }
 diesel = { workspace = true }
+diesel-derive-enum = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true }
-uuid = { workspace = true }

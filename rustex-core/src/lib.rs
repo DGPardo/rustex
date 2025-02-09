@@ -2,6 +2,7 @@ mod currencies;
 pub mod db;
 mod models;
 mod order_matching;
+
 pub mod prelude;
 
 /// Macro to acquire an exclusive lock

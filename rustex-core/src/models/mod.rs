@@ -15,12 +15,11 @@ impl From<i64> for UserId {
     }
 }
 
-impl UserId {
-    pub fn into_inner(self) -> i64 {
-        self.0
+impl From<UserId> for i64 {
+    fn from(value: UserId) -> Self {
+        value.0
     }
 }
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
 pub struct EpochTime(u128);
 

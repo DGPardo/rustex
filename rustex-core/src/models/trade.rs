@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::orders::OrderId;
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Default, Copy, Clone)]
-pub struct TradeId(u128);
+pub struct TradeId(i64);
 
 impl TradeId {
     pub fn fetch_increment(&mut self) -> TradeId {
@@ -13,14 +13,20 @@ impl TradeId {
     }
 }
 
-impl From<u128> for TradeId {
-    fn from(value: u128) -> Self {
+impl From<i64> for TradeId {
+    fn from(value: i64) -> Self {
         Self(value)
     }
 }
 
+impl From<TradeId> for i64 {
+    fn from(value: TradeId) -> Self {
+        value.0
+    }
+}
+
 /// Defines a given trade in the exchange
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Trade {
     /// This will be unique and always increasing
     pub(crate) id: TradeId,

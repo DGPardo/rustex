@@ -6,6 +6,13 @@ use db_service::DbServiceClient;
 use match_service::MatchServiceClient;
 use time_service::TimeServiceClient;
 
+pub(crate) const DEFAULT_MAX_NUMBER_CO_CONNECTIONS: usize = 10_000;
+pub(crate) const DEFAULT_ADDRESS: &str = "127.0.0.1"; // Of this microservice
+
+pub use db_service::ADDRESS as DB_RPC_ADDRESS;
+pub use match_service::ADDRESS as MATCH_RPC_ADDRESS;
+pub use time_service::ADDRESS as TIME_RPC_ADDRESS;
+
 macro_rules! generate_client {
     ($($client_type:ty),* $(,)?) => {
         paste::paste! {

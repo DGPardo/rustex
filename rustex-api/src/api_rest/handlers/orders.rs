@@ -1,5 +1,6 @@
 use crate::{api_rest::state::AppState, auth::Claims};
 use actix_web::{web, HttpResponse};
+use rustex_core::prelude::ExchangeMarkets;
 use rustex_errors::RustexError;
 use serde::Deserialize;
 use serde_json::json;
@@ -9,6 +10,7 @@ use tarpc::context;
 pub struct ClientOrder {
     pub price: i64,
     pub quantity: f64,
+    pub exchange: ExchangeMarkets,
 }
 
 pub async fn insert_buy_order(
@@ -39,26 +41,21 @@ impl OrderType {
         order: web::Json<ClientOrder>,
         user: Claims,
     ) -> Result<HttpResponse, RustexError> {
-        let time = state.time_rpc_client.get_time(context::current()).await??;
-
         macro_rules! insert_order {
             ($fname:ident) => {
-                state
-                    .match_order_rpc_client
-                    .$fname(
-                        context::current(),
-                        user.sub,
-                        order.price,
-                        order.quantity,
-                        time,
-                    )
-                    .await
+                if let Some(match_service) = state.match_orders.get(&order.exchange) {
+                    match_service.$fname(context::current(), user.sub, order.price, order.quantity)
+                } else {
+                    return Err(rustex_errors::match_error!(
+                        "Failed to locate the requested exchange market"
+                    ));
+                }
             };
         }
 
         let (order_id, trades) = match self {
-            OrderType::Buy => insert_order!(insert_buy_order),
-            OrderType::Sell => insert_order!(insert_sell_order),
+            OrderType::Buy => insert_order!(insert_buy_order).await?,
+            OrderType::Sell => insert_order!(insert_sell_order).await?,
         }?;
 
         Ok(HttpResponse::Ok().json(json!({

@@ -10,3 +10,4 @@ diesel-async = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 tarpc = { workspace = true }
+tokio = { workspace = true }

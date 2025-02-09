@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 
-use super::{EpochTime, UserId};
+use super::UserId;
 
 #[derive(
     Debug, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord, Default, Clone, Copy, Hash,
@@ -22,28 +22,32 @@ impl From<i64> for OrderId {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+impl From<OrderId> for i64 {
+    fn from(value: OrderId) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Deserialize, Serialize, Copy, Clone)]
 pub struct BuyOrder(Order);
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Deserialize, Serialize, Copy, Clone)]
 pub struct SellOrder(Order);
 
 /// Defines an order (either buy or sell order)
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Copy, Clone)]
 pub struct Order {
     /// This will be unique and always increasing number
     pub id: OrderId,
     pub user_id: UserId,
     pub price: i64, // working with cents
     pub quantity: f64,
-    pub unix_epoch: EpochTime,
 }
 
 impl Eq for Order {}
-
 impl PartialEq for Order {
     fn eq(&self, other: &Self) -> bool {
-        self.price == other.price && self.unix_epoch == other.unix_epoch
+        self.id == other.id
     }
 }
 
@@ -85,7 +89,7 @@ impl Ord for BuyOrder {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.price
             .cmp(&other.price) // Highest to lowest buy price
-            .then(self.unix_epoch.cmp(&other.unix_epoch))
+            .then(self.0.id.cmp(&other.0.id))
     }
 }
 
@@ -94,6 +98,6 @@ impl Ord for SellOrder {
         self.price
             .cmp(&other.price)
             .reverse() // Lowest to highest sell price
-            .then(self.unix_epoch.cmp(&other.unix_epoch))
+            .then(self.0.id.cmp(&other.0.id))
     }
 }

@@ -129,23 +129,24 @@ impl MatchOrders for SellOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::EpochTime;
 
     #[test]
     fn test_successful_match() {
         let book = OrderBook::default();
 
-        let now = EpochTime::now().unwrap();
-        let (order_id, trades) = book.insert_sell_order(123.into(), 50, 10.0, now);
-        assert_eq!(order_id, 0.into());
+        let order: SellOrder = book.into_order(123.into(), 50, 10.0);
+        assert_eq!(order.id, 0.into());
+        let (trades, _completed_orders) = order.match_order(&book);
         assert!(trades.is_empty());
 
-        let (order_id, trades) = book.insert_sell_order(456.into(), 45, 5.0, now);
-        assert_eq!(order_id, 1.into());
+        let order: SellOrder = book.into_order(456.into(), 45, 5.0);
+        assert_eq!(order.id, 1.into());
+        let (trades, _completed_orders) = order.match_order(&book);
         assert!(trades.is_empty());
 
-        let (order_id, trades) = book.insert_buy_order(2.into(), 50, 8.0, now);
-        assert_eq!(order_id, 2.into());
+        let order: BuyOrder = book.into_order(2.into(), 50, 8.0);
+        assert_eq!(order.id, 2.into());
+        let (trades, _completed_orders) = order.match_order(&book);
 
         assert_eq!(
             trades,

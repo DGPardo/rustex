@@ -8,7 +8,7 @@ use crate::{lock, order_matching::MatchOrders};
 use super::{
     orders::{BuyOrder, Order, OrderId, SellOrder},
     trade::{Trade, TradeId},
-    EpochTime, UserId,
+    UserId,
 };
 
 /// Book Tracking of orders
@@ -36,9 +36,8 @@ impl OrderBook {
         lock!(self.trade_counter).fetch_increment()
     }
 
-    fn process_order<T: From<Order> + MatchOrders>(&self, order: Order) -> Vec<Trade> {
+    pub fn process_order<T: From<Order> + MatchOrders>(&self, order: T) -> Vec<Trade> {
         lock!(self.pending_orders).insert(order.id);
-        let order = T::from(order);
         let (trades, completed_orders) = order.match_order(self);
 
         let mut pending = lock!(self.pending_orders);
@@ -48,40 +47,14 @@ impl OrderBook {
         trades
     }
 
-    pub fn insert_buy_order(
-        &self,
-        user_id: UserId,
-        price: i64,
-        quantity: f64,
-        unix_epoch: EpochTime,
-    ) -> (OrderId, Vec<Trade>) {
+    pub fn into_order<T: From<Order>>(&self, user_id: UserId, price: i64, quantity: f64) -> T {
         let order_id = self.fetch_next_order_id();
-        let order = Order {
+        T::from(Order {
             id: order_id,
             user_id,
             price,
             quantity,
-            unix_epoch,
-        };
-        (order_id, self.process_order::<BuyOrder>(order))
-    }
-
-    pub fn insert_sell_order(
-        &self,
-        user_id: UserId,
-        price: i64,
-        quantity: f64,
-        time: EpochTime,
-    ) -> (OrderId, Vec<Trade>) {
-        let order_id = self.fetch_next_order_id();
-        let order = Order {
-            id: order_id,
-            user_id,
-            price,
-            quantity,
-            unix_epoch: time,
-        };
-        (order_id, self.process_order::<SellOrder>(order))
+        })
     }
 
     pub fn make_trade(

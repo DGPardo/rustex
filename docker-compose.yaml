@@ -10,3 +10,9 @@ services:
     environment:
       POSTGRES_USER: ${PG_USERNAME}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
+
+    volumes:
+      - rustex_pg:/var/lib/postgresql/data
+
+volumes:
+  rustex_pg:

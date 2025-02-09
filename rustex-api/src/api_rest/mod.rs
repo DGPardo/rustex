@@ -73,10 +73,10 @@ pub async fn launch_http_server() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod test {
-    use std::{future::Future, time::Duration};
-    use dotenvy::dotenv;
-    use rpc_clients::{match_service, time_service, db_service};
     use super::*;
+    use dotenvy::dotenv;
+    use rpc_clients::{db_service, match_service, time_service};
+    use std::{future::Future, time::Duration};
 
     async fn with_services(inner: impl Future<Output = ()>) {
         dotenv().unwrap();

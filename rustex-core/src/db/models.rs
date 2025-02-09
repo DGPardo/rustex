@@ -1,43 +1,73 @@
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use uuid::Uuid;
+use diesel_derive_enum::DbEnum;
 
-use crate::prelude::{BuyOrder, SellOrder};
+use crate::prelude::{BuyOrder, SellOrder, Trade};
+
+#[derive(DbEnum, Debug)]
+#[ExistingTypePath = "crate::db::schema::sql_types::Ordertype"]
+#[DbValueStyle = "snake_case"]
+pub enum OrderType {
+    Buy,
+    Sell,
+}
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = super::schema::orders)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DbOrder {
-    pub order_id: Uuid,
+    pub order_id: i64,
     pub user_id: i64,
     pub price: i64,
     pub quantity: f64,
-    pub utc_epoch: i64,
-    pub buy_order: bool,
+    pub order_type: OrderType,
 }
 
-macro_rules! into_db_order {
-    ($order_id:ident, $order:ident, $buy: expr) => {{
-        let nanos: u128 = $order.unix_epoch.into_inner();
-        if nanos > i64::MAX as u128 {
-            panic!("Son, take care of this code.")
+impl From<SellOrder> for DbOrder {
+    fn from(order: SellOrder) -> Self {
+        Self {
+            order_id: order.id.into(),
+            user_id: order.user_id.into(),
+            price: order.price,
+            quantity: order.quantity,
+            order_type: OrderType::Sell,
         }
-        DbOrder {
-            $order_id,
-            user_id: $order.user_id.into_inner(),
-            price: $order.price,
-            quantity: $order.quantity,
-            utc_epoch: nanos as i64,
-            buy_order: $buy,
-        }
-    }};
-}
-
-impl DbOrder {
-    pub fn from_sell_order(order_id: Uuid, sell_order: SellOrder) -> Self {
-        into_db_order!(order_id, sell_order, false)
     }
+}
 
-    pub fn from_buy_order(order_id: Uuid, buy_order: BuyOrder) -> Self {
-        into_db_order!(order_id, buy_order, true)
+impl From<BuyOrder> for DbOrder {
+    fn from(order: BuyOrder) -> Self {
+        Self {
+            order_id: order.id.into(),
+            user_id: order.user_id.into(),
+            price: order.price,
+            quantity: order.quantity,
+            order_type: OrderType::Buy,
+        }
+    }
+}
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = super::schema::trades)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbTrade {
+    trade_id: i64,
+    buy_order: i64,
+    sell_order: i64,
+    price: i64,
+    quantity: f64,
+    created_at: Option<DateTime<Utc>>, // Diesel automatically handles time-zone conversions
+}
+
+impl From<Trade> for DbTrade {
+    fn from(t: Trade) -> Self {
+        Self {
+            trade_id: t.id.into(),
+            buy_order: t.buy_order_id.into(),
+            sell_order: t.sell_order_id.into(),
+            price: t.price,
+            quantity: t.quantity,
+            created_at: None,
+        }
     }
 }

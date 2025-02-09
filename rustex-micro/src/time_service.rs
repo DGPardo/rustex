@@ -1,4 +1,3 @@
-use dotenvy::dotenv;
 use futures::{future, StreamExt};
 use rustex_core::prelude::EpochTime;
 use rustex_errors::RustexError;
@@ -14,11 +13,10 @@ use tarpc::{
     tokio_serde::formats::Json,
 };
 
-const DEFAULT_ADDRESS: &str = "127.0.0.1";
+use crate::{DEFAULT_ADDRESS, DEFAULT_MAX_NUMBER_CO_CONNECTIONS};
 const DEFAULT_PORT: u16 = 7777;
-const DEFAULT_MAX_NUMBER_CO_CONNECTIONS: usize = 10_000;
 
-static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
+pub static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
     let addr = std::env::var("TIME_RPC_ADDRESS")
         .map(|addr| addr.into_boxed_str())
         .unwrap_or_else(|_| DEFAULT_ADDRESS.into());
@@ -47,13 +45,6 @@ impl TimeService for TimeServer {
     async fn get_time(self, _: Context) -> Result<EpochTime, RustexError> {
         Ok(EpochTime::now()?)
     }
-}
-
-#[tokio::main]
-pub async fn main() {
-    dotenv().unwrap();
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
-    start_service().await
 }
 
 pub async fn start_service() {

@@ -3,11 +3,13 @@ use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     AsyncPgConnection, RunQueryDsl,
 };
-use dotenvy::dotenv;
 use futures::{future, StreamExt};
 use rustex_core::{
-    db::models::DbOrder,
-    prelude::{db, BuyOrder, SellOrder},
+    db::{
+        self,
+        models::{DbOrder, DbTrade},
+    },
+    prelude::{BuyOrder, ExchangeMarkets, SellOrder, Trade},
 };
 use rustex_errors::RustexError;
 use std::{
@@ -17,19 +19,18 @@ use std::{
     sync::LazyLock,
 };
 use tarpc::{context::Context, tokio_serde::formats::Json};
-use uuid::Uuid;
 
-const DEFAULT_ADDRESS: &str = "127.0.0.1"; // Of this microservice
+use crate::{DEFAULT_ADDRESS, DEFAULT_MAX_NUMBER_CO_CONNECTIONS};
+
 const DEFAULT_PORT: u16 = 6666;
-const DEFAULT_MAX_NUMBER_CO_CONNECTIONS: usize = 10_000;
 
-static DATABASE_ADDRESS: LazyLock<Box<str>> = LazyLock::new(|| {
+pub static DATABASE_ADDRESS: LazyLock<Box<str>> = LazyLock::new(|| {
     let addr = std::env::var("POSTGRES_ADDRESS")
         .expect("POSTGRES_ADDRESS is not defined as an environment variable");
     addr.into_boxed_str()
 });
 
-static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
+pub static ADDRESS: LazyLock<(IpAddr, u16)> = LazyLock::new(|| {
     let addr = std::env::var("DATABASE_RPC_ADDRESS")
         .map(|addr| addr.into_boxed_str())
         .unwrap_or_else(|_| DEFAULT_ADDRESS.into());
@@ -47,17 +48,27 @@ static MAX_NUMBER_CO_CONNECTIONS: LazyLock<usize> = LazyLock::new(|| {
 
 #[tarpc::service]
 pub trait DbService {
-    async fn record_buy_order(buy_order: BuyOrder) -> Result<Uuid, RustexError>;
-    async fn record_sell_order(sell_order: SellOrder) -> Result<Uuid, RustexError>;
+    async fn record_buy_order(
+        exchange: ExchangeMarkets,
+        buy_order: BuyOrder,
+    ) -> Result<(), RustexError>;
+    async fn record_sell_order(
+        exchange: ExchangeMarkets,
+        sell_order: SellOrder,
+    ) -> Result<(), RustexError>;
+    async fn record_trades(
+        exchange: ExchangeMarkets,
+        trades: Vec<Trade>,
+    ) -> Result<(), RustexError>;
 }
 
 #[derive(Clone)]
-struct DbServer {
+pub struct DbServer {
     pool: Pool<AsyncPgConnection>, // Clone only increases reference counting
 }
 
 impl DbServer {
-    async fn new() -> Result<Self, RustexError> {
+    pub async fn new() -> Result<Self, RustexError> {
         let config =
             AsyncDieselConnectionManager::<AsyncPgConnection>::new(DATABASE_ADDRESS.to_string());
         let pool = Pool::builder(config).build()?;
@@ -67,44 +78,61 @@ impl DbServer {
 
 macro_rules! insert_order {
     ($self:ident, $fname:ident, $order:ident) => {{
-        let conn = &mut *$self.pool.get().await.unwrap();
+        let conn = &mut *$self.pool.get().await?;
+        let order: DbOrder = DbOrder::from($order);
+        let inserted_rows = diesel::insert_into(db::schema::orders::table)
+            .values(&order)
+            .returning(DbOrder::as_returning())
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .await?;
 
-        let order_id = Uuid::new_v4(); // TODO: check with DB for clashes
-        let mut order: DbOrder = $fname(order_id, $order);
-
-        let mut inserted_rows = 0;
-        while inserted_rows == 0 {
-            inserted_rows += diesel::insert_into(db::schema::orders::table)
-                .values(&order)
-                .returning(DbOrder::as_returning())
-                .on_conflict_do_nothing()
-                .execute(conn)
-                .await?;
-
-            log::warn!("Order UUID Clash detected. Retrying...");
-            order.order_id = Uuid::new_v4();
+        if inserted_rows != 1 {
+            panic!("Failed to insert the order in the database");
         }
-        Ok(order_id)
     }};
 }
 
 impl DbService for DbServer {
-    async fn record_buy_order(self, _: Context, buy: BuyOrder) -> Result<Uuid, RustexError> {
-        let from_buy = db::models::DbOrder::from_buy_order;
-        insert_order!(self, from_buy, buy)
+    async fn record_buy_order(
+        self,
+        _: Context,
+        _exchange: ExchangeMarkets,
+        buy: BuyOrder,
+    ) -> Result<(), RustexError> {
+        insert_order!(self, from_buy, buy);
+        Ok(())
     }
 
-    async fn record_sell_order(self, _: Context, sell: SellOrder) -> Result<Uuid, RustexError> {
-        let from_sell = db::models::DbOrder::from_sell_order;
-        insert_order!(self, from_sell, sell)
+    async fn record_sell_order(
+        self,
+        _: Context,
+        _exchange: ExchangeMarkets,
+        sell: SellOrder,
+    ) -> Result<(), RustexError> {
+        insert_order!(self, from_sell, sell);
+        Ok(())
     }
-}
 
-#[tokio::main]
-pub async fn main() {
-    dotenv().unwrap();
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
-    start_service().await
+    async fn record_trades(
+        self,
+        _: Context,
+        _exchange: ExchangeMarkets,
+        trades: Vec<Trade>,
+    ) -> Result<(), RustexError> {
+        let conn = &mut *self.pool.get().await?;
+        let trades = trades.into_iter().map(DbTrade::from).collect::<Vec<_>>();
+        let inserted_rows = diesel::insert_into(db::schema::trades::table)
+            .values(&trades)
+            .returning(DbTrade::as_returning())
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .await?;
+        if inserted_rows != trades.len() {
+            panic!("Failed to insert the order in the database");
+        }
+        Ok(())
+    }
 }
 
 pub async fn start_service() {
@@ -142,14 +170,13 @@ async fn spawn(fut: impl Future<Output = ()> + Send + 'static) {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use rustex_core::prelude::{Order, OrderId, UserId};
     use std::time::Duration;
     use tarpc::context;
-    use rustex_core::prelude::{EpochTime, Order, OrderId, UserId};
-    use super::*;
 
     #[tokio::test]
     async fn test_insert_buy_order() {
-        dotenv().unwrap();
         let server = tokio::spawn(start_service());
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -168,11 +195,14 @@ mod test {
             user_id: UserId::from(1),
             price: 2,
             quantity: 3.0,
-            unix_epoch: EpochTime::now().unwrap(),
         };
 
         let r = client
-            .record_buy_order(context::current(), BuyOrder::from(order))
+            .record_buy_order(
+                context::current(),
+                ExchangeMarkets::BTC_USD,
+                BuyOrder::from(order),
+            )
             .await;
 
         assert!(r.is_ok());
@@ -180,6 +210,5 @@ mod test {
 
         assert!(!server.is_finished());
         server.abort();
-
     }
 }
