@@ -28,6 +28,26 @@ pub struct OrderBook {
 }
 
 impl OrderBook {
+    pub fn from_db(
+        last_order: OrderId,
+        last_trade: TradeId,
+        buy_orders: Vec<BuyOrder>,
+        sell_orders: Vec<SellOrder>,
+    ) -> Self {
+        let pending = buy_orders
+            .iter()
+            .map(|e| e.id)
+            .chain(sell_orders.iter().map(|e| e.id))
+            .collect::<HashSet<OrderId>>();
+        Self {
+            buy_orders: Mutex::new(BinaryHeap::from(buy_orders)),
+            sell_orders: Mutex::new(BinaryHeap::from(sell_orders)),
+            pending_orders: Mutex::new(pending),
+            order_counter: Mutex::new(last_order),
+            trade_counter: Mutex::new(last_trade),
+        }
+    }
+
     fn fetch_next_order_id(&self) -> OrderId {
         lock!(self.order_counter).fetch_increment()
     }
@@ -36,15 +56,18 @@ impl OrderBook {
         lock!(self.trade_counter).fetch_increment()
     }
 
-    pub fn process_order<T: From<Order> + MatchOrders>(&self, order: T) -> Vec<Trade> {
+    pub fn process_order<T: From<Order> + MatchOrders>(
+        &self,
+        order: T,
+    ) -> (Vec<Trade>, Vec<OrderId>) {
         lock!(self.pending_orders).insert(order.id);
         let (trades, completed_orders) = order.match_order(self);
 
         let mut pending = lock!(self.pending_orders);
-        completed_orders.into_iter().for_each(|oid| {
-            pending.remove(&oid);
+        completed_orders.iter().for_each(|oid| {
+            pending.remove(oid);
         });
-        trades
+        (trades, completed_orders)
     }
 
     pub fn into_order<T: From<Order>>(&self, user_id: UserId, price: i64, quantity: f64) -> T {
@@ -54,6 +77,7 @@ impl OrderBook {
             user_id,
             price,
             quantity,
+            db_utc_tstamp_millis: None, // not registered yet
         })
     }
 

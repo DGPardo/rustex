@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;
+use serde::{Deserialize, Serialize};
 
-use crate::prelude::{BuyOrder, SellOrder, Trade};
+use crate::prelude::{BuyOrder, Order, OrderId, SellOrder, Trade};
 
-#[derive(DbEnum, Debug)]
+#[derive(DbEnum, Debug, Serialize, Deserialize)]
 #[ExistingTypePath = "crate::db::schema::sql_types::Ordertype"]
 #[DbValueStyle = "snake_case"]
 pub enum OrderType {
@@ -12,7 +13,7 @@ pub enum OrderType {
     Sell,
 }
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Queryable, Selectable, Insertable, Debug)]
 #[diesel(table_name = super::schema::orders)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DbOrder {
@@ -20,6 +21,7 @@ pub struct DbOrder {
     pub user_id: i64,
     pub price: i64,
     pub quantity: f64,
+    pub created_at: Option<DateTime<Utc>>, // Diesel automatically handles time-zone conversions
     pub order_type: OrderType,
 }
 
@@ -31,6 +33,7 @@ impl From<SellOrder> for DbOrder {
             price: order.price,
             quantity: order.quantity,
             order_type: OrderType::Sell,
+            created_at: None,
         }
     }
 }
@@ -43,6 +46,19 @@ impl From<BuyOrder> for DbOrder {
             price: order.price,
             quantity: order.quantity,
             order_type: OrderType::Buy,
+            created_at: None,
+        }
+    }
+}
+
+impl From<DbOrder> for Order {
+    fn from(value: DbOrder) -> Self {
+        Self {
+            id: value.order_id.into(),
+            user_id: value.user_id.into(),
+            price: value.price,
+            quantity: value.quantity,
+            db_utc_tstamp_millis: value.created_at.map(|e| e.timestamp_millis()),
         }
     }
 }
@@ -68,6 +84,33 @@ impl From<Trade> for DbTrade {
             price: t.price,
             quantity: t.quantity,
             created_at: None,
+        }
+    }
+}
+
+impl From<DbTrade> for Trade {
+    fn from(t: DbTrade) -> Self {
+        Self {
+            id: t.trade_id.into(),
+            buy_order_id: t.buy_order.into(),
+            sell_order_id: t.sell_order.into(),
+            price: t.price,
+            quantity: t.quantity,
+        }
+    }
+}
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = super::schema::pending_orders)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DbPendingOrder {
+    order_id: i64,
+}
+
+impl From<OrderId> for DbPendingOrder {
+    fn from(value: OrderId) -> Self {
+        DbPendingOrder {
+            order_id: value.into(),
         }
     }
 }

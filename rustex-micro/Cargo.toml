@@ -25,6 +25,7 @@ env_logger = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
+serde = { workspace = true }
 rustex-core = { workspace = true }
 rustex-errors = { workspace = true }
 tarpc = { workspace = true }

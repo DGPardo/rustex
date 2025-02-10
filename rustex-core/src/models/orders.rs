@@ -10,9 +10,8 @@ pub struct OrderId(i64);
 
 impl OrderId {
     pub fn fetch_increment(&mut self) -> OrderId {
-        let curr_value = self.0;
-        self.0 += 1;
-        OrderId(curr_value)
+        let next_value = self.0 + 1;
+        OrderId(std::mem::replace(&mut self.0, next_value))
     }
 }
 
@@ -42,6 +41,7 @@ pub struct Order {
     pub user_id: UserId,
     pub price: i64, // working with cents
     pub quantity: f64,
+    pub db_utc_tstamp_millis: Option<i64>,
 }
 
 impl Eq for Order {}

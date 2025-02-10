@@ -1,6 +1,6 @@
 services:
-  db:
-    profiles: [debug, db]
+  rustex-db:
+    profiles: [debug, rustex-db]
     image: postgres
     restart: always
     shm_size: 128mb
@@ -38,6 +38,8 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    depends_on:
+      - backend-match-micro
 
   backend-db-micro:
     profiles: [debug, db-service]
@@ -48,7 +50,12 @@ services:
     command: ["db-service"]
     restart: unless-stopped
     environment:
-      DATABASE_RPC_ADDRESS: "0.0.0.0"
+      DATABASE_RPC_ADDRESS: "0.0.0.0" # Micro service listening address
+      POSTGRES_ADDRESS: "rustex-db:5432/rustex"
+
+    depends_on:
+      rustex-db:
+        condition: service_healthy
 
   backend-match-micro:
     profiles: [debug, match-service]
@@ -62,6 +69,8 @@ services:
       DATABASE_RPC_ADDRESS: "backend-db-micro"
       MATCH_RPC_ADDRESS: "0.0.0.0"
 
+    depends_on:
+      - backend-db-micro
 
 volumes:
   rustex_pg:

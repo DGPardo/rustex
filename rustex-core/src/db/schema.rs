@@ -21,6 +21,12 @@ diesel::table! {
 }
 
 diesel::table! {
+    pending_orders (order_id) {
+        order_id -> Int8,
+    }
+}
+
+diesel::table! {
     trades (trade_id) {
         trade_id -> Int8,
         buy_order -> Int8,
@@ -31,7 +37,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    orders,
-    trades,
-);
+diesel::allow_tables_to_appear_in_same_query!(orders, pending_orders, trades,);

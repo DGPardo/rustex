@@ -30,3 +30,31 @@ macro_rules! generate_client {
 }
 
 generate_client!(MatchServiceClient, DbServiceClient);
+
+#[macro_export]
+macro_rules! create_tarpc_server {
+    ($address:expr, $max_conns:expr, $server_state:expr) => {{
+        let mut listener = tarpc::serde_transport::tcp::listen(
+            $address,
+            tarpc::tokio_serde::formats::Json::default,
+        )
+        .await
+        .unwrap();
+
+        listener.config_mut().max_frame_length(u32::MAX as usize);
+
+        async fn tokio_spawn(fut: impl Future<Output = ()> + Send + 'static) {
+            tokio::spawn(fut);
+        }
+
+        listener
+            .filter_map(|r| futures::future::ready(r.ok()))
+            .map(tarpc::server::BaseChannel::with_defaults)
+            .map(|channel| {
+                tarpc::server::Channel::execute(channel, $server_state.clone().serve())
+                    .for_each(tokio_spawn)
+            })
+            .buffered($max_conns) // in order
+            .for_each(|_| async {})
+    }};
+}

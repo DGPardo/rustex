@@ -28,12 +28,11 @@ impl From<TradeId> for i64 {
 /// Defines a given trade in the exchange
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Trade {
-    /// This will be unique and always increasing
-    pub(crate) id: TradeId,
-    pub(crate) buy_order_id: OrderId,
-    pub(crate) sell_order_id: OrderId,
-    pub(crate) price: i64,
-    pub(crate) quantity: f64,
+    pub id: TradeId,
+    pub buy_order_id: OrderId,
+    pub sell_order_id: OrderId,
+    pub price: i64,
+    pub quantity: f64,
 }
 
 impl Eq for Trade {}
