@@ -2216,6 +2216,7 @@ dependencies = [
  "diesel-derive-enum",
  "log",
  "paste",
+ "rustex-errors",
  "serde",
 ]
 
@@ -2224,6 +2225,7 @@ name = "rustex-errors"
 version = "0.0.0"
 dependencies = [
  "actix-web",
+ "anyhow",
  "diesel",
  "diesel-async",
  "jsonwebtoken",

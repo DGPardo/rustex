@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = { workspace = true }
+anyhow = { workspace = true }
 diesel = { workspace = true }
 diesel-async = { workspace = true }
 jsonwebtoken = { workspace = true }

@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
+
+use serde::{Deserialize, Serialize};
 
 use super::UserId;
 

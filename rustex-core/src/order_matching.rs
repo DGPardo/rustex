@@ -55,14 +55,14 @@ impl MatchOrders for BuyOrder {
                     completed_orders.push(sell_order.id);
                 }
 
-                if self.quantity.abs() < f64::EPSILON {
+                if self.quantity.abs() <= f64::EPSILON {
                     completed_orders.push(self.id);
                     return (trades, completed_orders);
                 }
             }
         } // Release sell_orders lock
 
-        if self.quantity > 0.0 {
+        if self.quantity > f64::EPSILON {
             lock!(book.buy_orders).push(self);
         }
         (trades, completed_orders)
@@ -105,20 +105,20 @@ impl MatchOrders for SellOrder {
                 ));
 
                 // If the sell order still has some quantity
-                if self.quantity.abs() > f64::EPSILON {
+                if buy_order.quantity.abs() > f64::EPSILON {
                     buy_orders.push(buy_order);
                 } else {
                     completed_orders.push(buy_order.id);
                 }
 
-                if self.quantity.abs() < f64::EPSILON {
+                if self.quantity.abs() <= f64::EPSILON {
                     completed_orders.push(self.id);
                     return (trades, completed_orders);
                 }
             }
         } // Release buy_orders lock
 
-        if self.quantity > 0.0 {
+        if self.quantity > f64::EPSILON {
             lock!(book.sell_orders).push(self);
         }
 

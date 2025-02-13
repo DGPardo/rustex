@@ -1,10 +1,41 @@
-use crate::{api_rest::state::AppState, auth::Claims};
+use std::collections::HashMap;
+
 use actix_web::{web, HttpResponse};
-use rustex_core::prelude::ExchangeMarkets;
+use rustex_core::prelude::{ExchangeMarkets, OrderId};
 use rustex_errors::RustexError;
 use serde::Deserialize;
 use serde_json::json;
-use tarpc::context;
+use tarpc::context::{self, Context};
+use tokio::task::JoinSet;
+
+use crate::{api_rest::state::AppState, auth::Claims};
+
+pub async fn get_orders(
+    user: Claims,
+    state: web::Data<AppState>,
+) -> Result<HttpResponse, RustexError> {
+    let mut tasks = JoinSet::new();
+
+    for (&market, rpc_client) in state.match_orders.iter() {
+        let rpc_client = rpc_client.clone();
+        tasks.spawn(async move {
+            if let Ok(Ok(orders)) = rpc_client
+                .get_user_orders(Context::current(), user.sub)
+                .await
+            {
+                (market, Some(orders))
+            } else {
+                log::error!("Failed to pull the orders for market: {:?}", market);
+                (market, None)
+            }
+        });
+    }
+
+    let orders: HashMap<ExchangeMarkets, Option<Vec<OrderId>>> =
+        tasks.join_all().await.into_iter().collect();
+
+    Ok(HttpResponse::Ok().json(orders))
+}
 
 #[derive(Deserialize)]
 pub struct ClientOrder {
@@ -13,25 +44,28 @@ pub struct ClientOrder {
     pub exchange: ExchangeMarkets,
 }
 
-pub async fn insert_buy_order(
-    state: web::Data<AppState>,
-    order: web::Json<ClientOrder>,
-    user: Claims,
-) -> Result<HttpResponse, RustexError> {
-    OrderType::Buy.insert_new_order(state, order, user).await
-}
-
-pub async fn insert_sell_order(
-    state: web::Data<AppState>,
-    order: web::Json<ClientOrder>,
-    user: Claims,
-) -> Result<HttpResponse, RustexError> {
-    OrderType::Sell.insert_new_order(state, order, user).await
-}
-
-enum OrderType {
+#[derive(Deserialize)]
+pub enum OrderType {
     Buy,
     Sell,
+}
+
+#[derive(Deserialize)]
+pub struct OrderQuery {
+    order_type: OrderType,
+}
+
+pub async fn insert_order(
+    query: web::Query<OrderQuery>,
+    order_info: web::Json<ClientOrder>,
+    user: Claims,
+    state: web::Data<AppState>,
+) -> Result<HttpResponse, RustexError> {
+    // Using enum impl to route the query
+    query
+        .order_type
+        .insert_new_order(state, order_info, user)
+        .await
 }
 
 impl OrderType {
@@ -46,8 +80,8 @@ impl OrderType {
                 if let Some(match_service) = state.match_orders.get(&order.exchange) {
                     match_service.$fname(context::current(), user.sub, order.price, order.quantity)
                 } else {
-                    return Err(rustex_errors::match_error!(
-                        "Failed to locate the requested exchange market"
+                    return Err(RustexError::MatchServiceError(
+                        "Failed to locate the requested exchange market".into(),
                     ));
                 }
             };
@@ -65,6 +99,34 @@ impl OrderType {
     }
 }
 
-pub async fn get_order_state() -> HttpResponse {
-    HttpResponse::Ok().finish()
+#[derive(Deserialize)]
+pub struct OrderStateQuery {
+    order_id: OrderId,
+    market: ExchangeMarkets,
+}
+
+pub async fn get_order_state(
+    state: web::Data<AppState>,
+    query: web::Query<OrderStateQuery>,
+    user: Claims,
+) -> Result<HttpResponse, RustexError> {
+    let (order_id, market) = (query.order_id, query.market);
+    if let Some(market) = state.match_orders.get(&market) {
+        let progress = market
+            .get_order_progress(Context::current(), user.sub, order_id)
+            .await?;
+        Ok(HttpResponse::Ok().json(progress))
+    } else {
+        Err(RustexError::UserFacingError(
+            "Requested market exchange is not available in this server".into(),
+        ))
+    }
+}
+
+pub async fn try_delete_order(
+    _state: web::Data<AppState>,
+    _order_id: web::Path<OrderId>,
+    _user: Claims,
+) -> Result<HttpResponse, RustexError> {
+    unimplemented!()
 }

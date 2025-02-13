@@ -10,4 +10,5 @@ diesel = { workspace = true }
 diesel-derive-enum = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
+rustex-errors = { workspace = true }
 serde = { workspace = true }

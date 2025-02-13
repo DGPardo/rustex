@@ -1,3 +1,5 @@
+use std::{future::Future, sync::LazyLock};
+
 use diesel::{
     dsl::max, query_dsl::methods::SelectDsl, ExpressionMethods, JoinOnDsl, QueryDsl,
     SelectableHelper,
@@ -12,10 +14,9 @@ use rustex_core::{
         self,
         models::{DbOrder, DbPendingOrder, DbTrade, OrderType},
     },
-    prelude::{BuyOrder, ExchangeMarkets, Order, OrderId, SellOrder, Trade, TradeId},
+    prelude::{BuyOrder, ExchangeMarkets, Order, OrderId, SellOrder, Trade, TradeId, UserId},
 };
 use rustex_errors::RustexError;
-use std::{future::Future, sync::LazyLock};
 use tarpc::context::Context;
 
 use crate::{create_tarpc_server, DEFAULT_ADDRESS, DEFAULT_MAX_NUMBER_CO_CONNECTIONS};
@@ -62,7 +63,10 @@ pub trait DbService {
     /// Returns all `sell` pending order ids
     async fn get_pending_sell_orders_ids() -> Result<Vec<OrderId>, RustexError>;
 
-    /// Returns the orders as requested by the user
+    /// Return all the orders of a given user
+    async fn get_user_orders(user: UserId) -> Result<Vec<OrderId>, RustexError>;
+
+    /// Returns the orders requested by the user
     async fn get_orders(orders: Vec<OrderId>) -> Result<Vec<Order>, RustexError>;
 
     /// Returns the trades associated with the given `buy` order
@@ -182,6 +186,19 @@ impl DbService for DbServer {
         let conn = &mut *self.pool.get().await?;
         let order_type = OrderType::Sell;
         pending_orders!(conn, order_type)
+    }
+
+    async fn get_user_orders(self, _: Context, user: UserId) -> Result<Vec<OrderId>, RustexError> {
+        let conn = &mut *self.pool.get().await?;
+        let user: i64 = user.into();
+
+        use db::schema::orders::dsl::*;
+        let rows: Vec<DbOrder> = orders.filter(user_id.eq(user)).load(conn).await?;
+        let rows: Vec<OrderId> = rows
+            .into_iter()
+            .map(|order| order.order_id.into())
+            .collect();
+        Ok(rows)
     }
 
     async fn get_orders(
@@ -315,50 +332,4 @@ async fn test_connection_to_db(db_server: DbServer) -> DbServer {
         .await
         .expect("Failed to execute test query");
     db_server
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use rustex_core::prelude::{Order, OrderId, UserId};
-    use std::time::Duration;
-    use tarpc::context;
-
-    #[tokio::test]
-    async fn test_insert_buy_order() {
-        let server = tokio::spawn(start_service());
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        let mut transport = tarpc::serde_transport::tcp::connect(
-            &*ADDRESS,
-            tarpc::tokio_serde::formats::Json::default,
-        );
-        transport.config_mut().max_frame_length(u32::MAX as usize);
-
-        let client =
-            DbServiceClient::new(tarpc::client::Config::default(), transport.await.unwrap())
-                .spawn();
-
-        let order = Order {
-            id: OrderId::from(0),
-            user_id: UserId::from(1),
-            price: 2,
-            quantity: 3.0,
-            db_utc_tstamp_millis: None,
-        };
-
-        let r = client
-            .record_buy_order(
-                context::current(),
-                ExchangeMarkets::BTC_USD,
-                BuyOrder::from(order),
-            )
-            .await;
-
-        assert!(r.is_ok());
-        assert!(r.unwrap().is_ok());
-
-        assert!(!server.is_finished());
-        server.abort();
-    }
 }

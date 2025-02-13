@@ -8,14 +8,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RustexError {
-    InternalServerError(InternalServerError),
     UserFacingError(String),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum InternalServerError {
+    AuthorizationError(RustexInternalError),
     DbServiceError(RustexInternalError),
     MatchServiceError(RustexInternalError),
+    OtherInternal(RustexInternalError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,25 +28,23 @@ impl<T: AsRef<str>> From<T> for RustexInternalError {
     }
 }
 
-#[macro_export]
-macro_rules! match_error {
-    ($msg:expr) => {
-        rustex_errors::RustexError::InternalServerError(
-            rustex_errors::InternalServerError::MatchServiceError(
-                rustex_errors::RustexInternalError::from($msg),
-            ),
-        )
-    };
-}
-
 impl Display for RustexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            RustexError::InternalServerError(_) => {
-                write!(f, "Internal Server Error")
-            }
             RustexError::UserFacingError(e) => {
                 write!(f, "User Error: {}", e)
+            }
+            RustexError::AuthorizationError(_) => {
+                write!(f, "AUTH Internal Server Error")
+            }
+            RustexError::DbServiceError(_) => {
+                write!(f, "DB Internal Server Error")
+            }
+            RustexError::MatchServiceError(_) => {
+                write!(f, "MATCH Internal Server Error")
+            }
+            RustexError::OtherInternal(_) => {
+                write!(f, "OTHER Internal Server Error")
             }
         }
     }
@@ -63,7 +58,21 @@ impl actix_web::ResponseError for RustexError {
             RustexError::UserFacingError(e) => {
                 HttpResponse::build(self.status_code()).body(e.to_owned())
             }
-            RustexError::InternalServerError(e) => {
+            RustexError::AuthorizationError(e) => {
+                log::error!("[AUTH INTERNAL SERVER ERROR]: {:?}", e);
+                HttpResponse::build(self.status_code())
+                    .body("AUTH Internal Server Error".to_string())
+            }
+            RustexError::DbServiceError(e) => {
+                log::error!("[DB INTERNAL SERVER ERROR]: {:?}", e);
+                HttpResponse::build(self.status_code()).body("DB Internal Server Error".to_string())
+            }
+            RustexError::MatchServiceError(e) => {
+                log::error!("[MATCH INTERNAL SERVER ERROR]: {:?}", e);
+                HttpResponse::build(self.status_code())
+                    .body("MATCH Internal Server Error".to_string())
+            }
+            RustexError::OtherInternal(e) => {
                 log::error!("[INTERNAL SERVER ERROR]: {:?}", e);
                 HttpResponse::build(self.status_code()).body("Internal Server Error".to_string())
             }
@@ -72,78 +81,40 @@ impl actix_web::ResponseError for RustexError {
     fn status_code(&self) -> StatusCode {
         match self {
             RustexError::UserFacingError(_) => StatusCode::BAD_REQUEST,
-            RustexError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            RustexError::AuthorizationError(_) => StatusCode::UNAUTHORIZED,
+            RustexError::DbServiceError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            RustexError::MatchServiceError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            RustexError::OtherInternal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
-// Implementation on Foreign Data Types
-impl From<SystemTimeError> for RustexError {
-    fn from(value: SystemTimeError) -> Self {
-        RustexError::InternalServerError(InternalServerError::MatchServiceError(
-            RustexInternalError::from(format!("SystemTimeError:: {:?}", value)),
-        ))
-    }
+macro_rules! impl_from_err {
+    ($( ($err_type:ty, $variant:ident) ),* ) => {
+        $(
+            impl From<$err_type> for RustexError {
+                fn from(value: $err_type) -> Self {
+                    RustexError::$variant(RustexInternalError::from(value.to_string()))
+                }
+            }
+        )*
+    };
 }
 
-impl From<tarpc::client::RpcError> for RustexError {
-    fn from(value: tarpc::client::RpcError) -> Self {
-        RustexError::InternalServerError(InternalServerError::MatchServiceError(
-            RustexInternalError::from(format!("tarpc::client::RpcError:: {:?}", value)),
-        ))
-    }
-}
-
-impl From<diesel::ConnectionError> for RustexError {
-    fn from(value: diesel::ConnectionError) -> Self {
-        RustexError::InternalServerError(InternalServerError::DbServiceError(
-            RustexInternalError::from(format!("diesel::ConnectionError:: {:?}", value)),
-        ))
-    }
-}
-
-impl From<diesel_async::pooled_connection::deadpool::BuildError> for RustexError {
-    fn from(value: diesel_async::pooled_connection::deadpool::BuildError) -> Self {
-        RustexError::InternalServerError(InternalServerError::DbServiceError(
-            RustexInternalError::from(format!(
-                "diesel_async::pooled_connection::deadpool::BuildError:: {:?}",
-                value
-            )),
-        ))
-    }
-}
-
-impl From<diesel_async::pooled_connection::deadpool::PoolError> for RustexError {
-    fn from(value: diesel_async::pooled_connection::deadpool::PoolError) -> Self {
-        RustexError::InternalServerError(InternalServerError::DbServiceError(
-            RustexInternalError::from(format!(
-                "diesel_async::pooled_connection::deadpool::PoolError:: {:?}",
-                value
-            )),
-        ))
-    }
-}
-
-impl From<diesel::result::Error> for RustexError {
-    fn from(value: diesel::result::Error) -> Self {
-        RustexError::InternalServerError(InternalServerError::DbServiceError(
-            RustexInternalError::from(format!("diesel::result::Error:: {:?}", value)),
-        ))
-    }
-}
-
-impl From<tokio::task::JoinError> for RustexError {
-    fn from(value: tokio::task::JoinError) -> Self {
-        RustexError::InternalServerError(InternalServerError::DbServiceError(
-            RustexInternalError::from(format!("tokio::task::JoinError:: {:?}", value)),
-        ))
-    }
-}
-
-impl From<jsonwebtoken::errors::Error> for RustexError {
-    fn from(value: jsonwebtoken::errors::Error) -> Self {
-        RustexError::InternalServerError(InternalServerError::DbServiceError(
-            RustexInternalError::from(format!("jsonwebtoken::errors::Error:: {:?}", value)),
-        ))
-    }
-}
+impl_from_err!(
+    (SystemTimeError, OtherInternal),
+    (tarpc::client::RpcError, OtherInternal),
+    (diesel::ConnectionError, DbServiceError),
+    (
+        diesel_async::pooled_connection::deadpool::BuildError,
+        DbServiceError
+    ),
+    (
+        diesel_async::pooled_connection::deadpool::PoolError,
+        DbServiceError
+    ),
+    (diesel::result::Error, DbServiceError),
+    (tokio::task::JoinError, OtherInternal),
+    (jsonwebtoken::errors::Error, AuthorizationError),
+    (anyhow::Error, OtherInternal)
+);

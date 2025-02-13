@@ -1,9 +1,10 @@
-use super::{claims::Claims, parse_auth_header};
 use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage,
 };
 use futures_util::future::{ok, ready, LocalBoxFuture, Ready};
+
+use super::{claims::Claims, parse_auth_header};
 
 #[derive(Clone)]
 pub struct JwtMiddleware;

@@ -23,6 +23,10 @@ A scalable exchange system built with Rust using **Actix Web**, **Tokio**, **Die
 
 ## Getting Started
 
+The application allows for plenty customization dividing the services between
+different exchange markets, databasesm API servers and microservices. For a basic setup follow the
+instructions below.
+
 ### Prerequisites
 
 - Install [Rust](https://www.rust-lang.org/tools/install)
@@ -82,14 +86,6 @@ WebSockets will be used for real-time market updates and order book changes.
 - **Microservices Deployment**: Each currency pair (e.g., `BTC_USD`, `BTC_GBP`) can be deployed independently.
 - **Database Sharding**: The PostgreSQL database can be split per currency pair for scalability.
 - **Containerization**: Docker and Kubernetes can be used for orchestration.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature-name`)
-3. Commit changes (`git commit -m 'Add new feature'`)
-4. Push to branch (`git push origin feature-name`)
-5. Open a Pull Request
 
 ## License
 

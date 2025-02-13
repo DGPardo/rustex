@@ -6,11 +6,10 @@ mod middleware;
 use std::sync::LazyLock;
 
 use actix_web::http::header::HeaderMap;
-use jsonwebtoken as jwt;
-use serde::Deserialize;
-
 pub use claims::{generate_jwt_token, Claims};
+use jsonwebtoken as jwt;
 pub use middleware::JwtMiddleware;
+use serde::Deserialize;
 
 static JWT_SECRET_KEY: LazyLock<String> = LazyLock::new(|| {
     std::env::var("JWT_SECRET_KEY").expect("Failed to read JWT_SECRET_KEY environment variable")

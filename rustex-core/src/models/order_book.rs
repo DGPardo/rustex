@@ -3,13 +3,12 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{lock, order_matching::MatchOrders};
-
 use super::{
     orders::{BuyOrder, Order, OrderId, SellOrder},
     trade::{Trade, TradeId},
     UserId,
 };
+use crate::{lock, order_matching::MatchOrders};
 
 /// Book Tracking of orders
 ///

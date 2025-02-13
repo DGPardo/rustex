@@ -1,18 +1,20 @@
-use crate::{
-    create_tarpc_server, db_service::DbServiceClient, get_db_service_client, DB_RPC_ADDRESS,
+use std::{
+    future::Future,
+    str::FromStr,
+    sync::{Arc, LazyLock},
 };
+
 use futures::StreamExt;
 use rustex_core::prelude::{
     BuyOrder, ExchangeMarkets, OrderBook, OrderId, SellOrder, Trade, TradeId, UserId,
 };
 use rustex_errors::RustexError;
-use std::{
-    future::Future,
-    sync::{Arc, LazyLock},
-};
 use tarpc::context::Context;
 use tokio::task::JoinSet;
 
+use crate::{
+    create_tarpc_server, db_service::DbServiceClient, get_db_service_client, DB_RPC_ADDRESS,
+};
 use crate::{DEFAULT_ADDRESS, DEFAULT_MAX_NUMBER_CO_CONNECTIONS};
 const DEFAULT_PORT: u16 = 5555;
 
@@ -45,6 +47,8 @@ pub trait MatchService {
         price: i64,
         quantity: f64,
     ) -> Result<(OrderId, Vec<Trade>), RustexError>;
+
+    async fn get_user_orders(user: UserId) -> Result<Vec<OrderId>, RustexError>;
 
     async fn get_order_progress(user: UserId, order_id: OrderId) -> (bool, f64); // (is_pending, quantity_left)
 }
@@ -152,6 +156,15 @@ impl MatchService for MatchingServer {
         // TODO: Slow Path -> Query Database and do not block book matching progress
         (false, 0.0)
     }
+
+    async fn get_user_orders(
+        self,
+        ctx: Context,
+        user: UserId,
+    ) -> Result<Vec<OrderId>, RustexError> {
+        let db_orders = self.db_rpc_client.get_user_orders(ctx, user).await??;
+        Ok(db_orders)
+    }
 }
 
 pub async fn start_service() {
@@ -169,7 +182,9 @@ pub async fn start_service() {
     // TODO: Gather order book from database
     // TODO: Specify which order book (by currency, etc...)
     let state = MatchingServer {
-        exchange: ExchangeMarkets::BTC_USD, // TODO: Either Env Arg or CLI Arg
+        exchange: std::env::var("EXCHANGE_MARKET")
+            .map(|env_var| ExchangeMarkets::from_str(&env_var).unwrap())
+            .expect("EXCHANGE_MARKET environment variable is not defined"),
         order_book: Arc::new(book),
         db_rpc_client,
     };
