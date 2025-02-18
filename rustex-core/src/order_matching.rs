@@ -5,7 +5,7 @@ use crate::{
     models::{
         order_book::OrderBook,
         orders::{BuyOrder, Order, SellOrder},
-        trade::Trade,
+        trades::Trade,
     },
     prelude::OrderId,
 };
@@ -42,8 +42,8 @@ impl MatchOrders for BuyOrder {
 
                 // Record the trade
                 trades.push(book.make_trade(
-                    self.id,
-                    sell_order.id,
+                    self.order_id,
+                    sell_order.order_id,
                     sell_order.price,
                     trade_quantity,
                 ));
@@ -52,11 +52,11 @@ impl MatchOrders for BuyOrder {
                 if sell_order.quantity.abs() > f64::EPSILON {
                     sell_orders.push(sell_order);
                 } else {
-                    completed_orders.push(sell_order.id);
+                    completed_orders.push(sell_order.order_id);
                 }
 
                 if self.quantity.abs() <= f64::EPSILON {
-                    completed_orders.push(self.id);
+                    completed_orders.push(self.order_id);
                     return (trades, completed_orders);
                 }
             }
@@ -98,8 +98,8 @@ impl MatchOrders for SellOrder {
 
                 // Record the trade
                 trades.push(book.make_trade(
-                    buy_order.id,
-                    self.id,
+                    buy_order.order_id,
+                    self.order_id,
                     buy_order.price,
                     trade_quantity,
                 ));
@@ -108,11 +108,11 @@ impl MatchOrders for SellOrder {
                 if buy_order.quantity.abs() > f64::EPSILON {
                     buy_orders.push(buy_order);
                 } else {
-                    completed_orders.push(buy_order.id);
+                    completed_orders.push(buy_order.order_id);
                 }
 
                 if self.quantity.abs() <= f64::EPSILON {
-                    completed_orders.push(self.id);
+                    completed_orders.push(self.order_id);
                     return (trades, completed_orders);
                 }
             }
@@ -129,47 +129,69 @@ impl MatchOrders for SellOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::orders::{ClientOrder, ExchangeMarket, OrderType};
 
     #[test]
     fn test_successful_match() {
-        let book = OrderBook::default();
-
-        let order: SellOrder = book.into_order(123.into(), 50, 10.0);
-        assert_eq!(order.id, 0.into());
+        let book = OrderBook::new(ExchangeMarket::BTC_EUR);
+        let sell1 = ClientOrder {
+            price: 50,
+            quantity: 10.0,
+            exchange: ExchangeMarket::BTC_EUR,
+            order_type: OrderType::Sell,
+        };
+        let sell2 = ClientOrder {
+            price: 45,
+            quantity: 5.0,
+            exchange: ExchangeMarket::BTC_EUR,
+            order_type: OrderType::Sell,
+        };
+        let buy1 = ClientOrder {
+            price: 50,
+            quantity: 8.0,
+            exchange: ExchangeMarket::BTC_EUR,
+            order_type: OrderType::Buy,
+        };
+        let order: SellOrder = book.into_order(sell1, 123.into()).unwrap();
+        assert_eq!(order.order_id, 0.into());
         let (trades, _completed_orders) = order.match_order(&book);
         assert!(trades.is_empty());
 
-        let order: SellOrder = book.into_order(456.into(), 45, 5.0);
-        assert_eq!(order.id, 1.into());
+        let order: SellOrder = book.into_order(sell2, 456.into()).unwrap();
+        assert_eq!(order.order_id, 1.into());
         let (trades, _completed_orders) = order.match_order(&book);
         assert!(trades.is_empty());
 
-        let order: BuyOrder = book.into_order(2.into(), 50, 8.0);
-        assert_eq!(order.id, 2.into());
+        let order: BuyOrder = book.into_order(buy1, 2.into()).unwrap();
+        assert_eq!(order.order_id, 2.into());
         let (trades, _completed_orders) = order.match_order(&book);
 
         assert_eq!(
             trades,
             vec![
                 Trade {
-                    id: 0.into(),
-                    buy_order_id: 2.into(),
-                    sell_order_id: 1.into(),
+                    trade_id: 0.into(),
+                    buy_order: 2.into(),
+                    sell_order: 1.into(),
                     price: 45,
-                    quantity: 5.0
+                    quantity: 5.0,
+                    exchange: ExchangeMarket::BTC_EUR,
+                    created_at: None,
                 },
                 Trade {
-                    id: 1.into(),
-                    buy_order_id: 2.into(),
-                    sell_order_id: 0.into(),
+                    trade_id: 1.into(),
+                    buy_order: 2.into(),
+                    sell_order: 0.into(),
                     price: 50,
-                    quantity: 3.0
+                    quantity: 3.0,
+                    exchange: ExchangeMarket::BTC_EUR,
+                    created_at: None,
                 },
             ]
         );
 
         let computed_sell_order = lock!(book.sell_orders).pop().unwrap();
-        assert_eq!(computed_sell_order.id, 0.into());
+        assert_eq!(computed_sell_order.order_id, 0.into());
         assert_eq!(computed_sell_order.price, 50);
         assert!((computed_sell_order.quantity - 7.0).abs() < f64::EPSILON);
         assert_eq!(computed_sell_order.user_id, 123.into());

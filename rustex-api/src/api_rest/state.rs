@@ -2,10 +2,10 @@ use std::{collections::HashMap, str::FromStr};
 
 use anyhow::Context;
 use rpc_clients::match_service::MatchServiceClient;
-use rustex_core::prelude::ExchangeMarkets;
+use rustex_core::prelude::ExchangeMarket;
 
 pub struct AppState {
-    pub match_orders: HashMap<ExchangeMarkets, MatchServiceClient>,
+    pub match_orders: HashMap<ExchangeMarket, MatchServiceClient>,
 }
 
 impl AppState {
@@ -15,7 +15,7 @@ impl AppState {
             .unwrap_or_default();
         let mut match_orders = HashMap::new();
         for market in markets {
-            let market = ExchangeMarkets::from_str(&market)?;
+            let market = ExchangeMarket::from_str(&market)?;
             let rpc_client_address = std::env::var(format!("{:?}_RPC_MATCH_SERVER", &market))
                 .context(format!(
                     "Exchange market {:?} has not specified its matching server",

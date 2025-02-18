@@ -30,23 +30,25 @@ headers = {
     "Authorization": f"Bearer {bearer_token}",
 }
 
-url = "https://0.0.0.0:5000/v1/orders?order_type=Buy"
+url = "https://127.0.0.1:5000/v1/orders"
 
 start = time()
 response = requests.post(url, cert=(cert_path, key_path), verify=False, json={
     "price": 1,
     "quantity": random() * 1_000_000,
     "exchange": "BTC_USD",
+    "orderType": "buy",
 }, headers=headers)
 assert response.ok, 'Failed to execute buy transaction'
 print('Buy transaction took: ', time() - start)
 
 start = time()
-url = "https://0.0.0.0:5000/v1/orders?order_type=Sell"
+url = "https://0.0.0.0:5000/v1/orders"
 response = requests.post(url, cert=(cert_path, key_path), verify=False, json={
     "price": 1,
     "quantity": random() * 1_000_000,
     "exchange": "BTC_USD",
+    "orderType": "sell",
 }, headers=headers)
 assert response.ok, 'Failed to execute sell transaction'
 print('Sell transaction took: ', time() - start)

@@ -15,7 +15,7 @@ services:
     volumes:
       - rustex_pg:/var/lib/postgresql/data
 
-  backend-api:
+  backend-api: # Can be linked to multiple exchange services
     profiles: [debug, api]
     image: backend/rest-api
     build:
@@ -29,8 +29,10 @@ services:
       SERVER_ADDRESS: "0.0.0.0"
       SERVER_PORT: "5000"
 
-      EXCHANGE_MARKETS: "BTC_USD"  # Can be a comma separated list
-      BTC_USD_RPC_MATCH_SERVER: "backend-match-micro:5555"
+      EXCHANGE_MARKETS: "BTC_USD, BTC_EUR, BTC_GBP"  # Can be a comma separated list
+      BTC_USD_RPC_MATCH_SERVER: "backend-match-micro-usd:5555"
+      BTC_EUR_RPC_MATCH_SERVER: "backend-match-micro-eur:5556"
+      BTC_GBP_RPC_MATCH_SERVER: "backend-match-micro-gbp:5557"
 
     restart: unless-stopped
     ports:
@@ -48,7 +50,7 @@ services:
       DATABASE_RPC_ADDRESS: "0.0.0.0" # Micro service listening address
       POSTGRES_ADDRESS: "rustex-db:5432/rustex"
 
-  backend-match-micro:
+  backend-match-micro-usd: # 1 Micro service per exchange
     profiles: [debug, match-service]
     image: backend/microservices
     build:
@@ -61,6 +63,34 @@ services:
       MATCH_RPC_ADDRESS: "0.0.0.0"
       MATCH_RPC_PORT: "5555"
       EXCHANGE_MARKET: "BTC_USD"
+
+  backend-match-micro-eur: # 1 Micro service per exchange
+    profiles: [debug, match-service]
+    image: backend/microservices
+    build:
+      context: .
+      dockerfile: Dockerfile.micro
+    command: ["match-service"]
+    restart: unless-stopped
+    environment:
+      DATABASE_RPC_ADDRESS: "backend-db-micro"
+      MATCH_RPC_ADDRESS: "0.0.0.0"
+      MATCH_RPC_PORT: "5556"
+      EXCHANGE_MARKET: "BTC_EUR"
+
+  backend-match-micro-gbp: # 1 Micro service per exchange
+    profiles: [debug, match-service]
+    image: backend/microservices
+    build:
+      context: .
+      dockerfile: Dockerfile.micro
+    command: ["match-service"]
+    restart: unless-stopped
+    environment:
+      DATABASE_RPC_ADDRESS: "backend-db-micro"
+      MATCH_RPC_ADDRESS: "0.0.0.0"
+      MATCH_RPC_PORT: "5557"
+      EXCHANGE_MARKET: "BTC_GBP"
 
 volumes:
   rustex_pg:

@@ -1,21 +1,12 @@
 use std::{future::Future, sync::LazyLock};
 
-use diesel::{
-    dsl::max, query_dsl::methods::SelectDsl, ExpressionMethods, JoinOnDsl, QueryDsl,
-    SelectableHelper,
-};
+use diesel::{dsl::max, BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::{
     pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager},
     AsyncPgConnection, RunQueryDsl,
 };
 use futures::StreamExt;
-use rustex_core::{
-    db::{
-        self,
-        models::{DbOrder, DbPendingOrder, DbTrade, OrderType},
-    },
-    prelude::{BuyOrder, ExchangeMarkets, Order, OrderId, SellOrder, Trade, TradeId, UserId},
-};
+use rustex_core::{db, prelude::*};
 use rustex_errors::RustexError;
 use tarpc::context::Context;
 
@@ -57,39 +48,31 @@ pub trait DbService {
     /// Returns the last trade id from the DB. It will be None if the table emtpy
     async fn get_last_trade_id() -> Result<Option<TradeId>, RustexError>;
 
-    /// Returns all `buy` pending order ids
-    async fn get_pending_buy_orders_ids() -> Result<Vec<OrderId>, RustexError>;
-
-    /// Returns all `sell` pending order ids
-    async fn get_pending_sell_orders_ids() -> Result<Vec<OrderId>, RustexError>;
+    /// Returns all pending order ids
+    async fn get_pending_orders_ids(market: ExchangeMarket) -> Result<Vec<OrderId>, RustexError>;
 
     /// Return all the orders of a given user
-    async fn get_user_orders(user: UserId) -> Result<Vec<OrderId>, RustexError>;
+    async fn get_user_orders(
+        user: UserId,
+        market: ExchangeMarket,
+    ) -> Result<Vec<OrderId>, RustexError>;
 
     /// Returns the orders requested by the user
     async fn get_orders(orders: Vec<OrderId>) -> Result<Vec<Order>, RustexError>;
 
     /// Returns the trades associated with the given `buy` order
-    async fn get_buy_order_trades(order: OrderId) -> Result<Vec<Trade>, RustexError>;
+    async fn get_order_trades(
+        order: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<Vec<Trade>, RustexError>;
 
-    /// Returns the trades associated with the given `sell` order
-    async fn get_sell_order_trades(order: OrderId) -> Result<Vec<Trade>, RustexError>;
+    /// Instert in the database a new order
+    async fn insert_order(order: Order) -> Result<(), RustexError>;
 
-    /// Records in the database a buying order
-    async fn record_buy_order(
-        exchange: ExchangeMarkets,
-        buy_order: BuyOrder,
-    ) -> Result<(), RustexError>;
-
-    /// Records in the database a selling order
-    async fn record_sell_order(
-        exchange: ExchangeMarkets,
-        sell_order: SellOrder,
-    ) -> Result<(), RustexError>;
-
-    /// Records in the database a Vector of trades
-    async fn record_trades(
-        exchange: ExchangeMarkets,
+    /// Inserts in the database a new list of trades.
+    /// Also, removes from the pending orders table those that are completed
+    async fn insert_trades(
+        market: ExchangeMarket,
         trades: Vec<Trade>,
         completed_orders: Vec<OrderId>,
     ) -> Result<(), RustexError>;
@@ -109,96 +92,50 @@ impl DbServer {
     }
 }
 
-macro_rules! insert_order {
-    ($self:ident, $fname:ident, $order:ident) => {{
-        let conn = &mut *$self.pool.get().await?;
-        let order: DbOrder = DbOrder::from($order);
-
-        let table_insert = diesel::insert_into(db::schema::orders::table)
-            .values(&order)
-            .returning(DbOrder::as_returning())
-            .execute(conn);
-
-        let order_id: DbPendingOrder = $order.id.into();
-        let pending_insert = diesel::insert_into(db::schema::pending_orders::table)
-            .values(&order_id)
-            .returning(DbPendingOrder::as_returning())
-            .execute(conn);
-
-        let (inserted_rows, pending_ok) = tokio::join!(table_insert, pending_insert);
-        let (inserted_rows, _pending_ok) = (inserted_rows?, pending_ok?);
-
-        if inserted_rows != 1 {
-            panic!("Failed to insert the order in the database");
-        }
-    }};
-}
-
-macro_rules! pending_orders {
-    ($conn:ident, $order_type:ident) => {{
-        use db::schema::*;
-        let join = pending_orders::table
-            .inner_join(orders::table.on(pending_orders::order_id.eq(orders::order_id)));
-        let filter = QueryDsl::filter(join, orders::order_type.eq($order_type));
-        let selection = QueryDsl::select(filter, orders::dsl::order_id);
-
-        let p_orders: Vec<i64> = selection.load($conn).await?;
-        Ok(p_orders.into_iter().map(|e| e.into()).collect())
-    }};
-}
-
-macro_rules! pending_order_trades {
-    ($conn:ident, $order_id:ident, $order_type:expr) => {{
-        let order: i64 = $order_id.into();
-        let rows: Vec<DbTrade> = db::schema::trades::dsl::trades
-            .filter($order_type.eq(order))
-            .load($conn)
-            .await?;
-        let rows: Vec<Trade> = rows.into_iter().map(Trade::from).collect();
-        Ok(rows)
-    }};
-}
-
 impl DbService for DbServer {
     async fn get_last_order_id(self, _: Context) -> Result<Option<OrderId>, RustexError> {
         let conn = &mut *self.pool.get().await?;
         use db::schema::orders::dsl::*;
-        let max_order_id: Option<i64> =
-            SelectDsl::select(orders, max(order_id)).first(conn).await?;
+        let max_order_id: Option<i64> = orders.select(max(order_id)).first(conn).await?;
         Ok(max_order_id.map(|e| e.into()))
     }
 
     async fn get_last_trade_id(self, _: Context) -> Result<Option<TradeId>, RustexError> {
         let conn = &mut *self.pool.get().await?;
         use db::schema::trades::dsl::*;
-        let max_trade_id: Option<i64> =
-            SelectDsl::select(trades, max(trade_id)).first(conn).await?;
+        let max_trade_id: Option<i64> = trades.select(max(trade_id)).first(conn).await?;
         Ok(max_trade_id.map(|e| e.into()))
     }
 
-    async fn get_pending_buy_orders_ids(self, _: Context) -> Result<Vec<OrderId>, RustexError> {
+    async fn get_pending_orders_ids(
+        self,
+        _: Context,
+        market: ExchangeMarket,
+    ) -> Result<Vec<OrderId>, RustexError> {
         let conn = &mut *self.pool.get().await?;
-        let order_type = OrderType::Buy;
-        pending_orders!(conn, order_type)
+        use db::schema::pending_orders::dsl::*;
+        let query = diesel::QueryDsl::select(pending_orders.filter(exchange.eq(market)), order_id);
+        let order_ids: Vec<i64> = query.load(conn).await?;
+        Ok(order_ids.into_iter().map(|e| e.into()).collect())
     }
 
-    async fn get_pending_sell_orders_ids(self, _: Context) -> Result<Vec<OrderId>, RustexError> {
-        let conn = &mut *self.pool.get().await?;
-        let order_type = OrderType::Sell;
-        pending_orders!(conn, order_type)
-    }
-
-    async fn get_user_orders(self, _: Context, user: UserId) -> Result<Vec<OrderId>, RustexError> {
+    async fn get_user_orders(
+        self,
+        _: Context,
+        user: UserId,
+        market: ExchangeMarket,
+    ) -> Result<Vec<OrderId>, RustexError> {
         let conn = &mut *self.pool.get().await?;
         let user: i64 = user.into();
 
         use db::schema::orders::dsl::*;
-        let rows: Vec<DbOrder> = orders.filter(user_id.eq(user)).load(conn).await?;
-        let rows: Vec<OrderId> = rows
-            .into_iter()
-            .map(|order| order.order_id.into())
-            .collect();
-        Ok(rows)
+        let query = orders
+            .filter(user_id.eq(user).and(exchange.eq(market)))
+            .select(order_id);
+        let order_ids: Vec<i64> = query.load(conn).await?;
+        let order_ids = order_ids.into_iter().map(|order| order.into()).collect();
+
+        Ok(order_ids)
     }
 
     async fn get_orders(
@@ -210,92 +147,103 @@ impl DbService for DbServer {
         let order_ids = order_ids.into_iter().map(i64::from).collect::<Vec<_>>();
 
         use db::schema::orders::dsl::*;
-        let rows: Vec<DbOrder> = orders.filter(order_id.eq_any(order_ids)).load(conn).await?;
-        let rows: Vec<Order> = rows.into_iter().map(Order::from).collect();
+        let rows: Vec<Order> = orders.filter(order_id.eq_any(order_ids)).load(conn).await?;
         Ok(rows)
     }
 
-    async fn get_buy_order_trades(
+    async fn get_order_trades(
         self,
         _: Context,
         order: OrderId,
+        market: ExchangeMarket,
     ) -> Result<Vec<Trade>, RustexError> {
         let conn = &mut *self.pool.get().await?;
+
+        let order: i64 = order.into();
+
         use db::schema::trades::dsl::*;
-        pending_order_trades!(conn, order, buy_order)
+        let query = trades.filter(
+            exchange
+                .eq(market)
+                .and(buy_order.eq(order).or(sell_order.eq(order))),
+        );
+        let rows: Vec<Trade> = query.load(conn).await?;
+        Ok(rows)
     }
 
-    async fn get_sell_order_trades(
-        self,
-        _: Context,
-        order: OrderId,
-    ) -> Result<Vec<Trade>, RustexError> {
+    async fn insert_order(self, _: Context, new_order: Order) -> Result<(), RustexError> {
         let conn = &mut *self.pool.get().await?;
-        use db::schema::trades::dsl::*;
-        pending_order_trades!(conn, order, sell_order)
-    }
 
-    async fn record_buy_order(
-        self,
-        _: Context,
-        _exchange: ExchangeMarkets,
-        buy: BuyOrder,
-    ) -> Result<(), RustexError> {
-        insert_order!(self, from_buy, buy);
+        // Insert new order
+        let insert_new_order = {
+            use db::schema::orders::dsl::*;
+            diesel::insert_into(orders).values(&new_order).execute(conn)
+        };
+
+        // Insert new pending order
+        let pending_order = PendingOrder {
+            order_id: new_order.order_id,
+            exchange: new_order.exchange,
+        };
+        let insert_new_pending_order = {
+            use db::schema::pending_orders::dsl::*;
+            diesel::insert_into(pending_orders)
+                .values(&pending_order)
+                .execute(conn)
+        };
+
+        let (insert_new_order, insert_new_pending_order) =
+            tokio::join!(insert_new_order, insert_new_pending_order);
+
+        // Raise errors
+        insert_new_order?;
+        insert_new_pending_order?;
+
         Ok(())
     }
 
-    async fn record_sell_order(
+    async fn insert_trades(
         self,
         _: Context,
-        _exchange: ExchangeMarkets,
-        sell: SellOrder,
-    ) -> Result<(), RustexError> {
-        insert_order!(self, from_sell, sell);
-        Ok(())
-    }
-
-    async fn record_trades(
-        self,
-        _: Context,
-        _exchange: ExchangeMarkets,
+        market: ExchangeMarket,
         trades: Vec<Trade>,
         completed_orders: Vec<OrderId>,
     ) -> Result<(), RustexError> {
-        let mut trades_conn = self.pool.get().await?;
-        let mut completed_conn = self.pool.get().await?;
+        let mut conn = self.pool.get().await?;
 
-        let trades = tokio::spawn(async move {
-            let trades = trades.into_iter().map(DbTrade::from).collect::<Vec<_>>();
-            let inserted_rows = diesel::insert_into(db::schema::trades::table)
+        // Insertion in Trades Table
+        let inserted_trades = {
+            diesel::insert_into(db::schema::trades::table)
                 .values(&trades)
-                .returning(DbTrade::as_returning())
-                .execute(&mut *trades_conn)
-                .await?;
-            if inserted_rows != trades.len() {
-                panic!("Failed to insert the order in the database");
-            }
-            Ok::<(), RustexError>(())
-        });
-        let completed = tokio::spawn(async move {
-            let completed_orders = completed_orders
-                .into_iter()
-                .map(i64::from)
-                .collect::<Vec<_>>();
-            let removed_rows = diesel::delete(
-                db::schema::pending_orders::table
-                    .filter(db::schema::pending_orders::order_id.eq_any(&completed_orders)),
-            )
-            .execute(&mut *completed_conn)
-            .await?;
-            if removed_rows != completed_orders.len() {
-                panic!("Failed to delete completed orders from the pending orders table");
-            }
-            Ok::<(), RustexError>(())
-        });
+                .returning(Trade::as_returning())
+                .execute(&mut *conn)
+        };
 
-        let (trades, completed) = tokio::join!(trades, completed);
-        let (_trades, _completed) = (trades??, completed??);
+        // Removing from Pending Orders Table
+        let marked_completed = {
+            use db::schema::pending_orders::dsl::*;
+            diesel::delete(
+                pending_orders.filter(order_id.eq_any(&completed_orders).and(exchange.eq(market))),
+            )
+            .execute(&mut *conn)
+        };
+
+        let (inserted_trades, marked_completed) = tokio::join!(inserted_trades, marked_completed);
+        let (inserted_trades, marked_completed) = (inserted_trades?, marked_completed?);
+
+        // Final error checking
+        if inserted_trades != trades.len() {
+            return Err(RustexError::DbServiceError(
+                "Failed to insert all orders in the database".into(),
+            ));
+        }
+
+        if marked_completed != completed_orders.len() {
+            return Err(RustexError::DbServiceError(
+                "Failed to delete completed orders from the pending orders table".into(),
+            ));
+        }
+
         Ok(())
     }
 }

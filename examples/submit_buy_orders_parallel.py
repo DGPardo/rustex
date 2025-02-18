@@ -5,9 +5,10 @@ import os
 from dotenv import load_dotenv
 from time import time
 from random import random
+import numpy as np
 
 # Limit concurrency
-CONCURRENT_REQUESTS = 50
+CONCURRENT_REQUESTS = 100
 
 # Set the number of parallel requests
 NUMBER_OF_REQUESTS = 10_000
@@ -15,8 +16,7 @@ NUMBER_OF_REQUESTS = 10_000
 async def send_requests(session, exchange_id, cert_path, key_path, headers, semaphore):
     print(exchange_id)
     async with semaphore:  # Limit number of concurrent requests
-        url_buy = "https://0.0.0.0:5000/v1/orders?order_type=Buy"
-        url_sell = "https://0.0.0.0:5000/v1/orders?order_type=Sell"
+        url = "https://0.0.0.0:5000/v1/orders"
 
         start = time()
 
@@ -25,23 +25,25 @@ async def send_requests(session, exchange_id, cert_path, key_path, headers, sema
             timeout = aiohttp.ClientTimeout(total=10)  # 10 seconds timeout
             quantity = random() * 1_000_000
             price = int(random() * 1_000_000)
-            if random() < 0.5:
-                response_buy = await session.post(url_buy, json={
-                    "price": price,
-                    "quantity": quantity,
-                    "exchange": "BTC_USD",
-                }, timeout=timeout, headers=headers)
+            order_type = "buy" if random() < 0.5 else "sell"
+            if random() < 0.33333:
+                exchange = "BTC_USD"
+            elif random() < 0.66666:
+                exchange = "BTC_EUR"
             else:
-                response_sell = await session.post(url_sell, json={
-                    "price": price,
-                    "quantity": quantity,
-                    "exchange": "BTC_USD",
-                }, timeout=timeout, headers=headers)
+                exchange = "BTC_GBP"
+            response_buy = await session.post(url, json={
+                "price": price,
+                "quantity": quantity,
+                "exchange": exchange,
+                "orderType": order_type,
+            }, timeout=timeout, headers=headers)
 
         except asyncio.TimeoutError:
             print(f"Exchange {exchange_id}: Request timed out!")
         except Exception as e:
             print(f"Exchange {exchange_id}: Error - {e}")
+    return time() - start
 
 
 async def main():
@@ -73,10 +75,11 @@ async def main():
             send_requests(session, exchange_id, cert_path, key_path, headers, semaphore)
             for exchange_id in range(NUMBER_OF_REQUESTS)
         ]
-        await asyncio.gather(*tasks)
+        latencies = await asyncio.gather(*tasks)
     elapsed = time() - start
-    latency = elapsed / NUMBER_OF_REQUESTS
-    print(f"{NUMBER_OF_REQUESTS} requests took: {elapsed}. Latency {latency}")
+    p95_latency = np.percentile(latencies, 95)
+
+    print(f"{NUMBER_OF_REQUESTS} requests took: {elapsed}. P95 Latency {p95_latency}")
 
 # Run the async event loop
 if __name__ == "__main__":

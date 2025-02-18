@@ -72,7 +72,6 @@ pub async fn launch_http_server() -> anyhow::Result<()> {
             .app_data(web::Data::clone(&app_state))
             .service(routes::get_public_api_service())
             .service(routes::get_protected_api_service().wrap(JwtMiddleware))
-        // .service(routes::get_protected_api_service())
     })
     .bind_rustls_0_23(format!("{}:{}", *SERVER_ADDRESS, *SERVER_PORT), tls_config)
     // .bind(format!("{}:{}", *SERVER_ADDRESS, *SERVER_PORT))
