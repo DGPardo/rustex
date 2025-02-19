@@ -1,6 +1,7 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use anyhow::Context;
+use hashbrown::HashMap;
 use rpc_clients::match_service::MatchServiceClient;
 use rustex_core::prelude::ExchangeMarket;
 

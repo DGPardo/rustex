@@ -8,6 +8,7 @@ edition = "2021"
 chrono = { workspace = true }
 diesel = { workspace = true }
 diesel-derive-enum = { workspace = true }
+hashbrown = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
 rustex-errors = { workspace = true }

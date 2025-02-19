@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use actix_web::{web, HttpResponse};
+use hashbrown::HashMap;
 use rustex_core::prelude::{ClientOrder, ExchangeMarket, OrderId};
 use rustex_errors::RustexError;
 use serde::Deserialize;

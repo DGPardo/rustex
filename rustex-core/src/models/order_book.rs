@@ -1,12 +1,12 @@
 use std::{
-    collections::{BinaryHeap, HashSet},
+    collections::BinaryHeap,
     ops::Deref,
     sync::{
         atomic::{AtomicI64, Ordering},
         Mutex,
     },
 };
-
+use hashbrown::HashSet;
 use rustex_errors::RustexError;
 
 use super::{

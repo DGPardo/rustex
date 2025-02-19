@@ -72,8 +72,7 @@ Currently it just generates a JWT Token.
 
 ### Orders
 
-- `POST /orders/buy` → Create a new buy order
-- `POST /orders/sell` → Create a new sell order
+- `POST /orders/sell` → Create a new order
 - `GET /orders/{id}` → Get order details (WIP)
 - `DELETE /orders/{id}` → Cancel an order (WIP)
 
