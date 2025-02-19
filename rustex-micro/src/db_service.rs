@@ -57,8 +57,17 @@ pub trait DbService {
         market: ExchangeMarket,
     ) -> Result<Vec<OrderId>, RustexError>;
 
+    /// Return the user for a specific order
+    async fn get_order_user(
+        order_id: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<Option<UserId>, RustexError>;
+
     /// Returns the orders requested by the user
-    async fn get_orders(orders: Vec<OrderId>) -> Result<Vec<Order>, RustexError>;
+    async fn get_orders(
+        orders: Vec<OrderId>,
+        market: ExchangeMarket,
+    ) -> Result<Vec<Order>, RustexError>;
 
     /// Returns the trades associated with the given `buy` order
     async fn get_order_trades(
@@ -66,7 +75,7 @@ pub trait DbService {
         market: ExchangeMarket,
     ) -> Result<Vec<Trade>, RustexError>;
 
-    /// Instert in the database a new order
+    /// Insert in the database a new order
     async fn insert_order(order: Order) -> Result<(), RustexError>;
 
     /// Inserts in the database a new list of trades.
@@ -76,6 +85,10 @@ pub trait DbService {
         trades: Vec<Trade>,
         completed_orders: Vec<OrderId>,
     ) -> Result<(), RustexError>;
+
+    /// Insert a new cancellation
+    async fn insert_cancellation(market: ExchangeMarket, order: OrderId)
+        -> Result<(), RustexError>;
 }
 
 #[derive(Clone)]
@@ -126,28 +139,53 @@ impl DbService for DbServer {
         market: ExchangeMarket,
     ) -> Result<Vec<OrderId>, RustexError> {
         let conn = &mut *self.pool.get().await?;
-        let user: i64 = user.into();
 
         use db::schema::orders::dsl::*;
         let query = orders
             .filter(user_id.eq(user).and(exchange.eq(market)))
             .select(order_id);
-        let order_ids: Vec<i64> = query.load(conn).await?;
-        let order_ids = order_ids.into_iter().map(|order| order.into()).collect();
+        let order_ids: Vec<OrderId> = query.load(conn).await?;
 
         Ok(order_ids)
+    }
+
+    async fn get_order_user(
+        self,
+        _: Context,
+        order_identifier: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<Option<UserId>, RustexError> {
+        let conn = &mut *self.pool.get().await?;
+
+        use db::schema::orders::dsl::*;
+        let query = orders
+            .filter(order_id.eq(order_identifier).and(exchange.eq(market)))
+            .select(user_id);
+        let user_ids = query.load(conn).await?;
+
+        match user_ids.len() {
+            0 => Ok(None),
+            1 => Ok(Some(user_ids[1])),
+            _ => Err(RustexError::DbServiceError(
+                "There are multiple users for a single order id".into(),
+            )),
+        }
     }
 
     async fn get_orders(
         self,
         _: Context,
         order_ids: Vec<OrderId>,
+        market: ExchangeMarket,
     ) -> Result<Vec<Order>, RustexError> {
         let conn = &mut *self.pool.get().await?;
         let order_ids = order_ids.into_iter().map(i64::from).collect::<Vec<_>>();
 
         use db::schema::orders::dsl::*;
-        let rows: Vec<Order> = orders.filter(order_id.eq_any(order_ids)).load(conn).await?;
+        let rows: Vec<Order> = orders
+            .filter(exchange.eq(market).and(order_id.eq_any(order_ids)))
+            .load(conn)
+            .await?;
         Ok(rows)
     }
 
@@ -241,6 +279,33 @@ impl DbService for DbServer {
         if marked_completed != completed_orders.len() {
             return Err(RustexError::DbServiceError(
                 "Failed to delete completed orders from the pending orders table".into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn insert_cancellation(
+        self,
+        _: Context,
+        market: ExchangeMarket,
+        order_id: OrderId,
+    ) -> Result<(), RustexError> {
+        let mut conn = self.pool.get().await?;
+
+        let cancellation = CancelledOrder {
+            order_id,
+            exchange: market,
+            created_at: None,
+        };
+        let insertion = diesel::insert_into(db::schema::cancelled_orders::table)
+            .values(&cancellation)
+            .returning(CancelledOrder::as_returning())
+            .execute(&mut *conn)
+            .await?;
+        if insertion != 1 {
+            return Err(RustexError::DbServiceError(
+                "Failed to record cancelled order".into(),
             ));
         }
 

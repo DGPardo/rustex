@@ -21,7 +21,7 @@ pub fn get_protected_api_service() -> Scope {
                 .route(web::post().to(orders::insert_order)),
         )
         .service(
-            web::resource("/{order_id}")
+            web::resource("/{exchange_market}/{order_id}")
                 .route(web::get().to(orders::get_order_state))
                 // Tries to deletes a given order
                 .route(web::delete().to(orders::try_delete_order)),

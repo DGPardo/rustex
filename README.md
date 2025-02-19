@@ -72,9 +72,9 @@ Currently it just generates a JWT Token.
 
 ### Orders
 
-- `POST /orders/sell` → Create a new order
-- `GET /orders/{id}` → Get order details (WIP)
-- `DELETE /orders/{id}` → Cancel an order (WIP)
+- `POST /orders` → Create a new order
+- `GET /orders/{market}/{id}` → Get order details
+- `DELETE /orders/{market}/{id}` → Cancel an order
 
 ## WebSocket API (WIP)
 

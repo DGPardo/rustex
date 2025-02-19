@@ -1,4 +1,6 @@
-use std::ops::DerefMut;
+use std::{ops::DerefMut, sync::MutexGuard};
+
+use hashbrown::HashSet;
 
 use crate::{
     lock,
@@ -11,11 +13,26 @@ use crate::{
 };
 
 pub trait MatchOrders: DerefMut<Target = Order> {
-    fn match_order(self, book: &OrderBook) -> (Vec<Trade>, Vec<OrderId>);
+    fn match_order(
+        self,
+        book: &OrderBook,
+        pending_orders: MutexGuard<HashSet<OrderId>>,
+    ) -> (Vec<Trade>, Vec<OrderId>);
+}
+
+macro_rules! complete_order {
+    ($order_id:expr, $completed:ident, $pending:ident) => {
+        $completed.push($order_id);
+        $pending.remove(&$order_id);
+    };
 }
 
 impl MatchOrders for BuyOrder {
-    fn match_order(mut self, book: &OrderBook) -> (Vec<Trade>, Vec<OrderId>) {
+    fn match_order(
+        mut self,
+        book: &OrderBook,
+        mut pending_orders: MutexGuard<HashSet<OrderId>>,
+    ) -> (Vec<Trade>, Vec<OrderId>) {
         let mut trades = vec![];
         let mut completed_orders = vec![];
 
@@ -28,6 +45,9 @@ impl MatchOrders for BuyOrder {
 
             // Sell orders are sorted from lowest to highest in price
             while let Some(mut sell_order) = sell_orders.pop() {
+                if !pending_orders.contains(&sell_order.order_id) {
+                    continue;
+                }
                 if sell_order.price > self.price {
                     // No match. The best sell price (lowest price)
                     // Exceeds the bid price (which is too low)
@@ -52,11 +72,11 @@ impl MatchOrders for BuyOrder {
                 if sell_order.quantity.abs() > f64::EPSILON {
                     sell_orders.push(sell_order);
                 } else {
-                    completed_orders.push(sell_order.order_id);
+                    complete_order!(sell_order.order_id, completed_orders, pending_orders);
                 }
 
                 if self.quantity.abs() <= f64::EPSILON {
-                    completed_orders.push(self.order_id);
+                    complete_order!(sell_order.order_id, completed_orders, pending_orders);
                     return (trades, completed_orders);
                 }
             }
@@ -70,7 +90,11 @@ impl MatchOrders for BuyOrder {
 }
 
 impl MatchOrders for SellOrder {
-    fn match_order(mut self, book: &OrderBook) -> (Vec<Trade>, Vec<OrderId>) {
+    fn match_order(
+        mut self,
+        book: &OrderBook,
+        mut pending_orders: MutexGuard<HashSet<OrderId>>,
+    ) -> (Vec<Trade>, Vec<OrderId>) {
         let mut trades = vec![];
         let mut completed_orders = vec![];
 
@@ -84,6 +108,9 @@ impl MatchOrders for SellOrder {
             // Buy orders are sorted from highest to lowest in price
 
             while let Some(mut buy_order) = buy_orders.pop() {
+                if !pending_orders.contains(&buy_order.order_id) {
+                    continue;
+                }
                 if self.price > buy_order.price {
                     // No match. The best buy price (highest) exceeds
                     // the ask price (which is too high).
@@ -108,11 +135,11 @@ impl MatchOrders for SellOrder {
                 if buy_order.quantity.abs() > f64::EPSILON {
                     buy_orders.push(buy_order);
                 } else {
-                    completed_orders.push(buy_order.order_id);
+                    complete_order!(buy_order.order_id, completed_orders, pending_orders);
                 }
 
                 if self.quantity.abs() <= f64::EPSILON {
-                    completed_orders.push(self.order_id);
+                    complete_order!(self.order_id, completed_orders, pending_orders);
                     return (trades, completed_orders);
                 }
             }
@@ -154,17 +181,23 @@ mod tests {
         };
         let order: SellOrder = book.into_order(sell1, 123.into()).unwrap();
         assert_eq!(order.order_id, 0.into());
-        let (trades, _completed_orders) = order.match_order(&book);
+        let pending = std::sync::Mutex::new(HashSet::from([order.order_id]));
+        let pending_guard = pending.lock().unwrap();
+        let (trades, _completed_orders) = order.match_order(&book, pending_guard);
         assert!(trades.is_empty());
 
         let order: SellOrder = book.into_order(sell2, 456.into()).unwrap();
         assert_eq!(order.order_id, 1.into());
-        let (trades, _completed_orders) = order.match_order(&book);
+        let pending = std::sync::Mutex::new(HashSet::from([order.order_id]));
+        let pending_guard = pending.lock().unwrap();
+        let (trades, _completed_orders) = order.match_order(&book, pending_guard);
         assert!(trades.is_empty());
 
         let order: BuyOrder = book.into_order(buy1, 2.into()).unwrap();
         assert_eq!(order.order_id, 2.into());
-        let (trades, _completed_orders) = order.match_order(&book);
+        let pending = std::sync::Mutex::new(HashSet::from([order.order_id]));
+        let pending_guard = pending.lock().unwrap();
+        let (trades, _completed_orders) = order.match_order(&book, pending_guard);
 
         assert_eq!(
             trades,

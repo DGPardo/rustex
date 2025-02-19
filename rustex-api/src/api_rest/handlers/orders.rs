@@ -52,21 +52,15 @@ pub async fn insert_order(
     }
 }
 
-#[derive(Deserialize)]
-pub struct OrderStateQuery {
-    order_id: OrderId,
-    market: ExchangeMarket,
-}
-
 pub async fn get_order_state(
     state: web::Data<AppState>,
-    query: web::Query<OrderStateQuery>,
+    path: web::Path<(ExchangeMarket, OrderId)>,
     user: Claims,
 ) -> Result<HttpResponse, RustexError> {
-    let (order_id, market) = (query.order_id, query.market);
-    if let Some(market) = state.match_orders.get(&market) {
-        let progress = market
-            .get_order_progress(Context::current(), user.sub, order_id)
+    let (market, order_id) = (path.0, path.1);
+    if let Some(market_rpc) = state.match_orders.get(&market) {
+        let progress = market_rpc
+            .get_order_progress(Context::current(), user.sub, order_id, market)
             .await?;
         Ok(HttpResponse::Ok().json(progress))
     } else {
@@ -77,9 +71,19 @@ pub async fn get_order_state(
 }
 
 pub async fn try_delete_order(
-    _state: web::Data<AppState>,
-    _order_id: web::Path<OrderId>,
-    _user: Claims,
+    state: web::Data<AppState>,
+    path: web::Path<(ExchangeMarket, OrderId)>,
+    user: Claims,
 ) -> Result<HttpResponse, RustexError> {
-    unimplemented!()
+    let (market, order_id) = (path.0, path.1);
+    if let Some(market_rpc) = state.match_orders.get(&market) {
+        let is_deleted = market_rpc
+            .try_delete_order(Context::current(), user.sub, order_id, market)
+            .await?;
+        Ok(HttpResponse::Ok().json(is_deleted))
+    } else {
+        Err(RustexError::UserFacingError(
+            "Requested market exchange is not available in this server".into(),
+        ))
+    }
 }

@@ -12,6 +12,17 @@ pub mod sql_types {
 
 diesel::table! {
     use diesel::sql_types::*;
+    use super::sql_types::Exchangemarket;
+
+    cancelled_orders (order_id, exchange) {
+        order_id -> Int8,
+        exchange -> Exchangemarket,
+        created_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
     use super::sql_types::Ordertype;
     use super::sql_types::Exchangemarket;
 
@@ -51,8 +62,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    orders,
-    pending_orders,
-    trades,
-);
+diesel::allow_tables_to_appear_in_same_query!(cancelled_orders, orders, pending_orders, trades,);

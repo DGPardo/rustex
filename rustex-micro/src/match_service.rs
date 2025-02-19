@@ -38,7 +38,17 @@ pub trait MatchService {
 
     async fn get_user_orders(user: UserId) -> Result<Vec<OrderId>, RustexError>;
 
-    async fn get_order_progress(user: UserId, order_id: OrderId) -> (bool, f64); // (is_pending, quantity_left)
+    async fn get_order_progress(
+        user: UserId,
+        order_id: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<(bool, f64), RustexError>; // (is_pending, quantity_left)
+
+    async fn try_delete_order(
+        user: UserId,
+        order_id: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<bool, RustexError>;
 }
 
 #[derive(Clone)]
@@ -101,12 +111,40 @@ impl MatchService for MatchingServer {
 
     async fn get_order_progress(
         self,
-        _: Context,
-        _user: UserId,
-        _order_id: OrderId,
-    ) -> (/*is pending=*/ bool, /*quantity left=*/ f64) {
-        // TODO: Slow Path -> Query Database and do not block book matching progress
-        (false, 0.0)
+        ctx: Context,
+        user: UserId,
+        order_id: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<(/*is pending=*/ bool, /*quantity left=*/ f64), RustexError> {
+        let order = self.db_rpc_client.get_orders(ctx, vec![order_id], market);
+        let trades = self.db_rpc_client.get_order_trades(ctx, order_id, market);
+
+        let (order, trades) = tokio::join!(order, trades);
+        let (orders, trades) = (order??, trades??);
+
+        if orders.len() != 1 {
+            return Err(RustexError::DbServiceError(
+                "Expecting to receive a single order".into(),
+            ));
+        }
+        let order = orders.first().unwrap();
+        if order.user_id != user {
+            return Err(RustexError::UserFacingError(
+                "The order id you requested does not match your user_id".into(),
+            ));
+        }
+        if order.exchange != market {
+            return Err(RustexError::DbServiceError(
+                "Order exchange market do not match".into(),
+            ));
+        }
+
+        let mut remaining = order.quantity;
+        trades.into_iter().for_each(|q| {
+            remaining -= q.quantity;
+        });
+
+        Ok((self.order_book.is_order_pending(order_id), remaining))
     }
 
     async fn get_user_orders(
@@ -119,6 +157,37 @@ impl MatchService for MatchingServer {
             .get_user_orders(ctx, user, self.exchange)
             .await??;
         Ok(db_orders)
+    }
+
+    async fn try_delete_order(
+        self,
+        ctx: Context,
+        user: UserId,
+        order_id: OrderId,
+        market: ExchangeMarket,
+    ) -> Result<bool, RustexError> {
+        let registered_user = self
+            .db_rpc_client
+            .get_order_user(ctx, order_id, market)
+            .await??; // O(1) in db
+        if registered_user.is_some_and(|reg_user| reg_user == user) {
+            if self.order_book.try_delete_order(order_id) {
+                self.db_rpc_client
+                    .insert_cancellation(ctx, market, order_id)
+                    .await??;
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        } else if registered_user.is_some() {
+            Err(RustexError::AuthorizationError(
+                "You are not authorized to cancel this order".into(),
+            ))
+        } else {
+            Err(RustexError::UserFacingError(
+                "Requested order is not associated with any user".into(),
+            ))
+        }
     }
 }
 
@@ -176,7 +245,7 @@ async fn initialize_order_book(
         .expect("TARPC Error collecting pending order ids")
         .expect("Error Extracting pending order ids from the database");
     let pending_orders = db_rpc_client
-        .get_orders(Context::current(), pending_order_ids)
+        .get_orders(Context::current(), pending_order_ids, market)
         .await
         .expect("TARPC Failed to collect pending orders")
         .expect("DB Failed to collect pending orders");

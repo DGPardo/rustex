@@ -6,6 +6,7 @@ use std::{
         Mutex,
     },
 };
+
 use hashbrown::HashSet;
 use rustex_errors::RustexError;
 
@@ -83,13 +84,10 @@ impl OrderBook {
         &self,
         order: T,
     ) -> (Vec<Trade>, Vec<OrderId>) {
-        lock!(self.pending_orders).insert(order.order_id);
-        let (trades, completed_orders) = order.match_order(self);
+        let mut pending_guard = lock!(self.pending_orders);
+        pending_guard.insert(order.order_id);
 
-        let mut pending = lock!(self.pending_orders);
-        completed_orders.iter().for_each(|oid| {
-            pending.remove(oid);
-        });
+        let (trades, completed_orders) = order.match_order(self, pending_guard);
         (trades, completed_orders)
     }
 
@@ -131,5 +129,13 @@ impl OrderBook {
             quantity,
             created_at: None,
         }
+    }
+
+    pub fn is_order_pending(&self, order_id: OrderId) -> bool {
+        lock!(self.pending_orders).contains(&order_id)
+    }
+
+    pub fn try_delete_order(&self, order_id: OrderId) -> bool {
+        lock!(self.pending_orders).remove(&order_id)
     }
 }

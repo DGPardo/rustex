@@ -1,5 +1,6 @@
 use diesel::{sql_types::BigInt, AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
+pub mod cancellations;
 pub mod order_book;
 pub mod orders;
 pub mod trades;
