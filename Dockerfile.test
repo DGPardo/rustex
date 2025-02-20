@@ -1,0 +1,10 @@
+FROM rust:1-bullseye AS builder
+COPY . .
+RUN cd rustex-test && cargo build -r && cargo install --path .
+
+FROM debian:bullseye-slim
+RUN apt-get update && apt-get install -y libpq-dev build-essential && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /.env .
+COPY --from=builder /usr/local/cargo/bin/rustex-test /usr/local/bin/rustex-test
+CMD ["rustex-test"]
+

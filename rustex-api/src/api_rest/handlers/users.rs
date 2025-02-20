@@ -10,14 +10,14 @@ pub struct Credentials {
     #[allow(dead_code)]
     username: String,
     #[allow(dead_code)]
-    hashed_password: String, // TODO: Salt + Nonce
+    password: String, // TODO: Salt + Nonce
 }
 
 type JwtToken = String;
 
 pub async fn login(
     _state: web::Data<AppState>,
-    _credentials: web::Json<Credentials>,
+    // _credentials: web::Json<Credentials>,
 ) -> Result<JwtToken, RustexError> {
     // TODO: Use third-party identity provider
 

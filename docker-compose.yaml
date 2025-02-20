@@ -92,5 +92,18 @@ services:
       MATCH_RPC_PORT: "5557"
       EXCHANGE_MARKET: "BTC_GBP"
 
+  rustex-tests: # Rustex tests
+    profiles: [test]
+    image: backend/e2e-test
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      RUSTEX_API_URL: "https://backend-api:5000"
+      TLS_CERT_PATH: tls_certs/cert.pem
+      TLS_KEY_PATH: tls_certs/key.pem
+    volumes:
+      - ./tls_certs:/tls_certs
+
 volumes:
   rustex_pg:

@@ -165,7 +165,7 @@ impl DbService for DbServer {
 
         match user_ids.len() {
             0 => Ok(None),
-            1 => Ok(Some(user_ids[1])),
+            1 => Ok(Some(user_ids[0])),
             _ => Err(RustexError::DbServiceError(
                 "There are multiple users for a single order id".into(),
             )),

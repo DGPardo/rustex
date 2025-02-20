@@ -4,6 +4,7 @@ members = [
     "rustex-core",
     "rustex-errors",
     "rustex-micro",
+    "rustex-test",
 
 ]
 resolver = "2"
@@ -18,7 +19,7 @@ tests = { path = "./tests" }
 # If more than one crate shares a dependency
 # then make it a workspace dependency
 actix-web = { version = "4.9.0", features = ["rustls-0_23"] }
-anyhow = "1.0.95"
+anyhow = "1.0"
 chrono = { version = "0.4.39", features = ["serde"] }
 diesel = { version = "2.2.7", features = ["postgres", "chrono"] }
 diesel-async = { version = "0.5.2", features = ["postgres", "deadpool"] }
@@ -31,6 +32,7 @@ hashbrown = { version = "0.15.2", features=["serde"] }
 jsonwebtoken = "9.3.1"
 log = "0.4.25"
 paste = "1.0.15"
-serde = { version = "1.0.217", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tarpc = { version = "0.35.0", features = ["full"] }
 tokio = { version = "1", features = ["full"] }

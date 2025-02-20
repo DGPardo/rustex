@@ -28,9 +28,14 @@ pub fn generate_jwt_token(
         role,
     };
 
-    Ok(jwt::encode(
-        &jwt::Header::default(),
-        &claims,
-        &jwt::EncodingKey::from_secret(JWT_SECRET_KEY.as_ref()),
-    )?)
+    let mut token = "Bearer ".to_string();
+    token.push_str(
+        jwt::encode(
+            &jwt::Header::default(),
+            &claims,
+            &jwt::EncodingKey::from_secret(JWT_SECRET_KEY.as_ref()),
+        )?
+        .as_str(),
+    );
+    Ok(token)
 }

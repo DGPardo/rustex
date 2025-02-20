@@ -144,7 +144,8 @@ impl MatchService for MatchingServer {
             remaining -= q.quantity;
         });
 
-        Ok((self.order_book.is_order_pending(order_id), remaining))
+        let is_pending = self.order_book.is_order_pending(order_id); // Could have been cancelled
+        Ok((is_pending, remaining))
     }
 
     async fn get_user_orders(

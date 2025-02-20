@@ -2,7 +2,6 @@ use actix_web::{web, HttpResponse};
 use hashbrown::HashMap;
 use rustex_core::prelude::{ClientOrder, ExchangeMarket, OrderId};
 use rustex_errors::RustexError;
-use serde::Deserialize;
 use tarpc::context::Context;
 use tokio::task::JoinSet;
 
@@ -61,7 +60,7 @@ pub async fn get_order_state(
     if let Some(market_rpc) = state.match_orders.get(&market) {
         let progress = market_rpc
             .get_order_progress(Context::current(), user.sub, order_id, market)
-            .await?;
+            .await??;
         Ok(HttpResponse::Ok().json(progress))
     } else {
         Err(RustexError::UserFacingError(
@@ -79,7 +78,7 @@ pub async fn try_delete_order(
     if let Some(market_rpc) = state.match_orders.get(&market) {
         let is_deleted = market_rpc
             .try_delete_order(Context::current(), user.sub, order_id, market)
-            .await?;
+            .await??;
         Ok(HttpResponse::Ok().json(is_deleted))
     } else {
         Err(RustexError::UserFacingError(
